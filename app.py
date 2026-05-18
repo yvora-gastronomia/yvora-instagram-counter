@@ -1,49 +1,32 @@
 import os
 import time
 from datetime import datetime
-from pathlib import Path
 from io import BytesIO
 
 import qrcode
 import requests
+import streamlit as st
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, send_file
-
-BASE_DIR = Path(__file__).resolve().parent
-TEMPLATES_DIR = BASE_DIR / "templates"
 
 load_dotenv()
-
-app = Flask(__name__, template_folder=str(TEMPLATES_DIR))
 
 PROFILE_URL = os.getenv("PROFILE_URL", "https://www.instagram.com/yvora.restaurante/")
 BRAND_NAME = os.getenv("BRAND_NAME", "YVORA")
 BRAND_SUBTITLE = os.getenv("BRAND_SUBTITLE", "Carnes, queijos e vinhos em uma jornada sensorial")
 FOLLOW_CTA = os.getenv("FOLLOW_CTA", "Explore o universo YVORA")
 GRAPH_VERSION = os.getenv("GRAPH_VERSION", "v25.0")
-
 USER_ACCESS_TOKEN = os.getenv("USER_ACCESS_TOKEN", "").strip()
 IG_BUSINESS_ID = os.getenv("IG_BUSINESS_ID", "17841445877381461").strip()
-
 MILESTONE_TARGET = int(os.getenv("MILESTONE_TARGET", "20000"))
 CACHE_SECONDS = int(os.getenv("CACHE_SECONDS", "15"))
-MEDIA_CACHE_SECONDS = int(os.getenv("MEDIA_CACHE_SECONDS", "60"))
 MOCK_FOLLOWERS_START = int(os.getenv("MOCK_FOLLOWERS_START", "19330"))
-
 FEATURED_DISH = os.getenv("FEATURED_DISH", "Tutano assado, queijo Tulha e steak tartare")
 FEATURED_PAIRING = os.getenv("FEATURED_PAIRING", "Uma experiência de gordura nobre, sal, textura e vinho")
 WINE_EXPLORER_URL = os.getenv("WINE_EXPLORER_URL", "https://yvora-wine.streamlit.app/")
 MENU_SENSORIAL_URL = os.getenv("MENU_SENSORIAL_URL", "https://yvora-menu-sensorial.streamlit.app/")
 
-_cache = {"ts": 0.0, "followers_count": 0, "source": "mock", "source_error": ""}
-_media_cache = {"ts": 0.0, "data": None, "source": "mock", "source_error": ""}
 
-
-def now_str() -> str:
-    return datetime.now().strftime("%d/%m %H:%M:%S")
-
-
-def _graph_get(path: str, params: dict | None = None, timeout: int = 10) -> dict:
+def graph_get(path: str, params: dict | None = None, timeout: int = 10) -> dict:
     if not USER_ACCESS_TOKEN:
         raise RuntimeError("USER_ACCESS_TOKEN vazio no ambiente")
     if not path.startswith("/"):
@@ -56,170 +39,132 @@ def _graph_get(path: str, params: dict | None = None, timeout: int = 10) -> dict
     return response.json()
 
 
-def fetch_followers_from_meta() -> int:
-    if not IG_BUSINESS_ID:
-        raise RuntimeError("IG_BUSINESS_ID vazio no ambiente")
-    data = _graph_get(f"/{IG_BUSINESS_ID}", params={"fields": "followers_count"}, timeout=10)
-    return int(data.get("followers_count", 0))
-
-
-def get_followers_count_cached():
-    now = time.time()
-    if now - _cache["ts"] < CACHE_SECONDS:
-        return _cache["followers_count"], _cache["source"], _cache["ts"], _cache.get("source_error", "")
+@st.cache_data(ttl=CACHE_SECONDS, show_spinner=False)
+def get_status() -> dict:
     try:
-        count = fetch_followers_from_meta()
-        source = "meta"
-        source_error = ""
+        data = graph_get(f"/{IG_BUSINESS_ID}", {"fields": "username,followers_count,media_count"})
+        return {
+            "followers_count": int(data.get("followers_count", 0)),
+            "media_count": int(data.get("media_count", 0)),
+            "username": data.get("username", "yvora.restaurante"),
+            "source": "meta",
+            "error": "",
+        }
     except Exception as exc:
-        count = MOCK_FOLLOWERS_START
-        source = "mock"
-        source_error = str(exc)
-    _cache.update({"ts": now, "followers_count": count, "source": source, "source_error": source_error})
-    return count, source, _cache["ts"], _cache.get("source_error", "")
+        return {
+            "followers_count": MOCK_FOLLOWERS_START,
+            "media_count": 34,
+            "username": "yvora.restaurante",
+            "source": "mock",
+            "error": str(exc),
+        }
 
 
-def fetch_media_from_meta(limit: int = 25) -> dict:
-    if not IG_BUSINESS_ID:
-        raise RuntimeError("IG_BUSINESS_ID vazio no ambiente")
-    fields = ",".join([
-        "id",
-        "caption",
-        "media_type",
-        "media_url",
-        "permalink",
-        "timestamp",
-        "like_count",
-        "comments_count",
-        "thumbnail_url",
-    ])
-    data = _graph_get(f"/{IG_BUSINESS_ID}/media", params={"fields": fields, "limit": str(limit)}, timeout=12)
-    normalized = []
-    for item in data.get("data", []) or []:
-        media_type = item.get("media_type") or ""
-        thumb = item.get("thumbnail_url") if media_type == "VIDEO" else item.get("media_url")
-        caption = (item.get("caption") or "").strip()
-        normalized.append({
-            "id": item.get("id"),
-            "caption": caption[:220],
-            "media_type": media_type,
-            "thumb_url": thumb or item.get("media_url") or "",
-            "permalink": item.get("permalink") or "",
-            "timestamp": item.get("timestamp") or "",
-            "like_count": int(item.get("like_count") or 0),
-            "comments_count": int(item.get("comments_count") or 0),
-        })
-    last_post = normalized[0] if normalized else None
-    reels = [x for x in normalized if "/reel/" in x.get("permalink", "").lower() or x.get("media_type") == "VIDEO"]
-    featured_reel = max(reels, key=lambda x: x["like_count"]) if reels else None
-    return {
-        "last_post": last_post,
-        "featured_reel": featured_reel,
-        "likes_last10": sum(x["like_count"] for x in normalized[:10]),
-        "items": normalized[:12],
-    }
-
-
-def get_media_cached():
-    now = time.time()
-    if now - _media_cache["ts"] < MEDIA_CACHE_SECONDS and _media_cache["data"]:
-        return _media_cache["data"], _media_cache["source"], _media_cache["ts"], ""
+@st.cache_data(ttl=60, show_spinner=False)
+def get_media() -> list[dict]:
     try:
-        data = fetch_media_from_meta()
-        source = "meta"
-        source_error = ""
-    except Exception as exc:
-        data = {"last_post": None, "featured_reel": None, "likes_last10": 0, "items": []}
-        source = "mock"
-        source_error = str(exc)
-    _media_cache.update({"ts": now, "data": data, "source": source, "source_error": source_error})
-    return data, source, now, source_error
+        fields = "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count,thumbnail_url"
+        data = graph_get(f"/{IG_BUSINESS_ID}/media", {"fields": fields, "limit": "12"}, timeout=12)
+        items = []
+        for item in data.get("data", []) or []:
+            media_type = item.get("media_type") or ""
+            thumb = item.get("thumbnail_url") if media_type == "VIDEO" else item.get("media_url")
+            items.append({
+                "caption": (item.get("caption") or "").strip()[:220],
+                "media_type": media_type,
+                "thumb_url": thumb or item.get("media_url") or "",
+                "permalink": item.get("permalink") or "",
+                "like_count": int(item.get("like_count") or 0),
+                "comments_count": int(item.get("comments_count") or 0),
+            })
+        return items
+    except Exception:
+        return []
 
 
-def template_payload(vertical: bool = False):
-    return {
-        "milestone_target": MILESTONE_TARGET,
-        "brand_name": BRAND_NAME,
-        "brand_subtitle": BRAND_SUBTITLE,
-        "follow_cta": FOLLOW_CTA,
-        "profile_url": PROFILE_URL,
-        "featured_dish": FEATURED_DISH,
-        "featured_pairing": FEATURED_PAIRING,
-        "wine_explorer_url": WINE_EXPLORER_URL,
-        "menu_sensorial_url": MENU_SENSORIAL_URL,
-        "vertical": vertical,
-    }
-
-
-@app.route("/")
-def index():
-    return render_template("index.html", **template_payload(vertical=False))
-
-
-@app.route("/vertical")
-def vertical():
-    return render_template("index.html", **template_payload(vertical=True))
-
-
-@app.route("/healthz")
-def healthz():
-    return jsonify(status="ok", app=BRAND_NAME)
-
-
-@app.route("/api/status")
-def api_status():
-    count, source, _, source_error = get_followers_count_cached()
-    return jsonify(
-        followers_count=count,
-        last_updated=now_str(),
-        profile_url=PROFILE_URL,
-        milestone_target=MILESTONE_TARGET,
-        source=source,
-        source_error=source_error,
-        graph_version=GRAPH_VERSION,
-        brand_name=BRAND_NAME,
-        featured_dish=FEATURED_DISH,
-        featured_pairing=FEATURED_PAIRING,
-    )
-
-
-@app.route("/api/media")
-def api_media():
-    data, source, _, source_error = get_media_cached()
-    return jsonify(media=data, last_updated=now_str(), source=source, source_error=source_error)
-
-
-@app.route("/qr.png")
-def qr_png():
-    img = qrcode.make(PROFILE_URL)
+def qr_data_uri(url: str) -> str:
+    img = qrcode.make(url)
     bio = BytesIO()
     img.save(bio, format="PNG")
-    bio.seek(0)
-    return send_file(bio, mimetype="image/png")
+    import base64
+    return "data:image/png;base64," + base64.b64encode(bio.getvalue()).decode("utf-8")
 
 
-@app.route("/qr-menu.png")
-def qr_menu_png():
-    img = qrcode.make(MENU_SENSORIAL_URL)
-    bio = BytesIO()
-    img.save(bio, format="PNG")
-    bio.seek(0)
-    return send_file(bio, mimetype="image/png")
+def render():
+    st.set_page_config(page_title="YVORA Social Wall", page_icon="🍷", layout="wide", initial_sidebar_state="collapsed")
+    status = get_status()
+    media = get_media()
+    highlight = media[0] if media else {}
+    image_url = highlight.get("thumb_url") or "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=1200&auto=format&fit=crop"
+    caption = highlight.get("caption") or "Explore pratos, harmonizações e experiências sensoriais do YVORA."
+    followers = f"{status['followers_count']:,}".replace(",", ".")
+    media_count = status.get("media_count", 0)
+    source_label = "Meta API" if status.get("source") == "meta" else "Modo fallback"
+    instagram_qr = qr_data_uri(PROFILE_URL)
+    menu_qr = qr_data_uri(MENU_SENSORIAL_URL)
+    wine_qr = qr_data_uri(WINE_EXPLORER_URL)
 
-
-@app.route("/qr-wine.png")
-def qr_wine_png():
-    img = qrcode.make(WINE_EXPLORER_URL)
-    bio = BytesIO()
-    img.save(bio, format="PNG")
-    bio.seek(0)
-    return send_file(bio, mimetype="image/png")
-
-
-def main():
-    port = int(os.getenv("PORT", "8501"))
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+    st.markdown(f"""
+<style>
+#MainMenu, footer, header {{visibility: hidden;}}
+.stApp {{background: radial-gradient(circle at top, #2b2118 0%, #0d0d0d 55%); color: #f5efe7;}}
+.block-container {{padding: 3rem 4rem 2rem 4rem; max-width: 100%;}}
+.yvora-grid {{display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 42px; min-height: 82vh;}}
+.logo {{font-size: 76px; letter-spacing: 10px; color: #d6ab67; font-weight: 800;}}
+.subtitle {{font-size: 27px; color: #f3e6d2; max-width: 760px; line-height: 1.35; margin-top: 8px;}}
+.counter-box {{margin-top: 42px; padding: 40px; border: 1px solid rgba(214,171,103,.35); border-radius: 28px; background: rgba(255,255,255,.045);}}
+.counter-label {{color: #d6ab67; font-size: 19px; text-transform: uppercase; letter-spacing: 3px;}}
+.counter {{font-size: 124px; font-weight: 800; line-height: 1; margin-top: 18px; color: #fff;}}
+.cta {{margin-top: 18px; font-size: 24px; color: #f3e6d2;}}
+.dish-box {{margin-top: 34px; padding: 30px; border-left: 4px solid #d6ab67; background: rgba(255,255,255,.035);}}
+.dish-title {{font-size: 34px; color: #fff; margin-bottom: 12px;}}
+.dish-text {{font-size: 20px; line-height: 1.6; color: #e5d7c3;}}
+.footer {{font-size: 16px; opacity: .68; margin-top: 34px;}}
+.qr-group {{display: flex; gap: 18px; justify-content: center; margin-top: 12px;}}
+.qr-card {{background: rgba(255,255,255,.055); border: 1px solid rgba(214,171,103,.25); padding: 16px; border-radius: 20px; text-align: center; width: 180px;}}
+.qr-card img {{width: 100%; border-radius: 12px; background: white; padding: 8px;}}
+.qr-card p {{margin: 12px 0 0 0; font-size: 16px; color: #f5efe7;}}
+.media-highlight {{margin-top: 28px; border-radius: 24px; overflow: hidden; border: 1px solid rgba(214,171,103,.25); background: rgba(255,255,255,.045);}}
+.media-highlight img {{width: 100%; height: 330px; object-fit: cover; display: block;}}
+.media-caption {{padding: 18px; font-size: 16px; line-height: 1.5; color: #f3e6d2;}}
+.source {{font-size: 14px; color: #b9aa95; margin-top: 8px;}}
+.wine {{position: fixed; bottom: -40px; font-size: 38px; animation: floatUp 6s linear forwards; opacity: 0; z-index: 20;}}
+@keyframes floatUp {{0% {{transform: translateY(0) scale(.7); opacity: 0;}} 15% {{opacity: 1;}} 100% {{transform: translateY(-110vh) rotate(10deg) scale(1.2); opacity: 0;}}}}
+@media (max-width: 900px) {{.yvora-grid {{grid-template-columns: 1fr;}} .counter {{font-size: 82px;}} .logo {{font-size: 54px;}} .qr-group {{flex-wrap: wrap;}}}}
+</style>
+<script>
+setInterval(function() {{ window.location.reload(); }}, 60000);
+</script>
+<div class="yvora-grid">
+  <div>
+    <div class="logo">{BRAND_NAME}</div>
+    <div class="subtitle">{BRAND_SUBTITLE}</div>
+    <div class="counter-box">
+      <div class="counter-label">Seguidores brindando com o YVORA</div>
+      <div class="counter">{followers}</div>
+      <div class="cta">{FOLLOW_CTA}</div>
+      <div class="source">{source_label} • {media_count} publicações • atualizado em {datetime.now().strftime('%d/%m %H:%M')}</div>
+    </div>
+    <div class="dish-box">
+      <div class="dish-title">{FEATURED_DISH}</div>
+      <div class="dish-text">{FEATURED_PAIRING}</div>
+    </div>
+    <div class="footer">Rua dos Pinheiros • São Paulo • Experimente, combine, descubra.</div>
+  </div>
+  <div>
+    <div class="qr-group">
+      <div class="qr-card"><img src="{instagram_qr}"><p>Instagram</p></div>
+      <div class="qr-card"><img src="{menu_qr}"><p>Menu Sensorial</p></div>
+      <div class="qr-card"><img src="{wine_qr}"><p>Wine Explorer</p></div>
+    </div>
+    <div class="media-highlight">
+      <img src="{image_url}">
+      <div class="media-caption">{caption}</div>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
-    main()
+    render()

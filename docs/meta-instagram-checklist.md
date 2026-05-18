@@ -6,69 +6,28 @@ A Página do Facebook foi encontrada no Graph API Explorer:
 
 ```env
 PAGE_ID=1132788549914321
-```
-
-A consulta abaixo retornou apenas o ID da página, sem `instagram_business_account`:
-
-```text
-1132788549914321?fields=instagram_business_account,connected_instagram_account
-```
-
-Retorno observado:
-
-```json
-{
-  "id": "1132788549914321"
-}
-```
-
-Isso indica que a API ainda não está conseguindo enxergar a conta Instagram Business conectada à Página.
-
-## Diagnóstico pelo Business Suite
-
-Na tela atual do Meta Business Suite, a Página YVORA aparece corretamente em:
-
-```text
-Configurações > Contas > Páginas
-```
-
-Página encontrada:
-
-```env
-PAGE_NAME=YVORA
-PAGE_ID=1132788549914321
 BUSINESS_ID=1670523267724041
 ```
 
-O próximo ponto de checagem é a aba **Ativos conectados** dentro da Página YVORA.
-
-## Próximo passo na tela atual
-
-1. Com a Página YVORA selecionada, clicar em **Ativos conectados**.
-2. Verificar se aparece `yvora.restaurante` como Instagram conectado.
-3. Se não aparecer, clicar em **Conectar ativos**.
-4. Selecionar a conta do Instagram `yvora.restaurante`.
-5. Confirmar a conexão com a Página YVORA.
-6. Depois ir em **Pessoas** e confirmar que o usuário que gera o token tem controle total.
-
-## Também conferir Contas do Instagram
-
-Caminho:
+A conexão visual no Meta Business Suite foi confirmada:
 
 ```text
-Configurações > Contas > Contas do Instagram
+Configurações > Contas > Páginas > YVORA > Ativos conectados
 ```
 
-Validar:
+Ativo conectado encontrado:
 
-1. `yvora.restaurante` aparece na lista.
-2. Está no mesmo portfólio empresarial `Yvora`.
-3. A Página conectada é `YVORA`.
-4. O usuário administrador tem controle total.
+```env
+INSTAGRAM_USERNAME=yvora.restaurante
+```
 
-## Permissões recomendadas no Graph API Explorer
+Isso confirma que a Página YVORA possui a conta do Instagram conectada no Business Suite. O próximo passo é gerar novo token com permissões completas e repetir a consulta na Graph API.
 
-Adicionar ao token:
+## Próximo passo no Graph API Explorer
+
+1. Voltar ao Graph API Explorer.
+2. Garantir que o app selecionado é `YVORA Social Wall`.
+3. Adicionar as permissões:
 
 ```text
 pages_show_list
@@ -78,7 +37,8 @@ instagram_basic
 instagram_manage_insights
 ```
 
-Depois gerar o token novamente.
+4. Clicar em **Generate Access Token** novamente.
+5. Autorizar a Página YVORA e o Instagram `yvora.restaurante`.
 
 ## Consultas para repetir
 
@@ -88,22 +48,39 @@ Depois gerar o token novamente.
 me/accounts
 ```
 
-2. Testar Instagram conectado:
+2. Testar Instagram conectado pela Página:
 
 ```text
 1132788549914321?fields=name,instagram_business_account,connected_instagram_account
 ```
 
-3. Tentar pelo Business ID:
+3. Tentar pelo Business ID se a consulta da Página ainda não trouxer o Instagram:
 
 ```text
 1670523267724041/owned_instagram_accounts?fields=id,username,followers_count
 ```
 
-4. Se retornar o Instagram Business ID, testar:
+4. Alternativa:
+
+```text
+1670523267724041/client_instagram_accounts?fields=id,username
+```
+
+5. Quando retornar o Instagram Business ID, testar:
 
 ```text
 IG_BUSINESS_ID?fields=username,followers_count,media_count
+```
+
+O retorno esperado é:
+
+```json
+{
+  "username": "yvora.restaurante",
+  "followers_count": 19300,
+  "media_count": 0,
+  "id": "1784..."
+}
 ```
 
 ## Variáveis finais para deploy

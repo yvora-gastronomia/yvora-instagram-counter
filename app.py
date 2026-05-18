@@ -178,10 +178,12 @@ def render():
 .change {{display:inline-block; margin-top:8px; padding:8px 12px; border-radius:999px; background:#f3e0c9; color:#8b4a19; font-size:13px; font-weight:800;}}
 .cta {{font-size:19px; font-weight:700; margin-top:18px; color:#211915;}}
 .main-qr {{margin-top:22px; padding:18px; background:#fff; border:1px solid #eadfd1; border-radius:22px; text-align:center;}}
+.main-qr-heading {{font-size:25px; line-height:1.25; font-weight:800; color:#211915; margin-bottom:14px;}}
+.main-qr-heading span {{color:#a7672d;}}
 .main-qr img {{width:250px; max-width:100%; display:block; margin:0 auto;}}
-.main-qr-title {{font-size:24px; font-weight:800; color:#211915; margin-top:12px;}}
+.main-qr-title {{font-size:22px; font-weight:800; color:#211915; margin-top:12px;}}
 .main-qr-subtitle {{font-size:14px; color:#6f6257; margin-top:6px;}}
-.metrics {{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:20px;}}
+.metrics {{display:grid; grid-template-columns:1fr; gap:12px; margin-top:20px;}}
 .metric {{background:#f7f0e7; border-radius:16px; padding:14px; border:1px solid #eadfd1;}}
 .metric b {{display:block; font-size:22px; color:#211915;}}
 .metric span {{font-size:12px; color:#6f6257; text-transform:uppercase; letter-spacing:1px;}}
@@ -232,9 +234,8 @@ def render():
   <div class="counter">{followers}</div>
   <div class="handle">@{esc(status.get('username'))}</div>
   {change_html}
-  <div class="main-qr"><img src="{instagram_qr}"><div class="main-qr-title">Siga nosso Instagram</div><div class="main-qr-subtitle">Aponte a câmera e acompanhe o YVORA</div></div>
-  <div class="cta">{esc(FOLLOW_CTA)}</div>
-  <div class="metrics"><div class="metric"><b>{int(status.get('media_count', 0))}</b><span>publicações</span></div><div class="metric"><b>{len(media)}</b><span>posts lidos</span></div></div>
+  <div class="main-qr"><div class="main-qr-heading">Siga o <span>YVORA no Instagram</span></div><img src="{instagram_qr}"><div class="main-qr-title">Aponte a câmera</div><div class="main-qr-subtitle">e acompanhe o YVORA</div></div>
+  <div class="metrics"><div class="metric"><b>{int(status.get('media_count', 0))}</b><span>publicações</span></div></div>
   <div class="small-qrs"><div class="qr"><img src="{menu_qr}"><span>Menu Sensorial</span></div><div class="qr"><img src="{wine_qr}"><span>Wine Explorer</span></div></div>
   <div class="footer-note">Rua dos Pinheiros · São Paulo</div>
 </div>

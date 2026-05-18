@@ -20,15 +20,15 @@ PROFILE_URL = os.getenv("PROFILE_URL", "https://www.instagram.com/yvora.restaura
 BRAND_NAME = os.getenv("BRAND_NAME", "YVORA")
 BRAND_SUBTITLE = os.getenv("BRAND_SUBTITLE", "Carnes, queijos e vinhos em uma jornada sensorial")
 FOLLOW_CTA = os.getenv("FOLLOW_CTA", "Explore o universo YVORA")
-GRAPH_VERSION = os.getenv("GRAPH_VERSION", "v24.0")
+GRAPH_VERSION = os.getenv("GRAPH_VERSION", "v25.0")
 
 USER_ACCESS_TOKEN = os.getenv("USER_ACCESS_TOKEN", "").strip()
-IG_BUSINESS_ID = os.getenv("IG_BUSINESS_ID", "").strip()
+IG_BUSINESS_ID = os.getenv("IG_BUSINESS_ID", "17841445877381461").strip()
 
-MILESTONE_TARGET = int(os.getenv("MILESTONE_TARGET", "10000"))
+MILESTONE_TARGET = int(os.getenv("MILESTONE_TARGET", "20000"))
 CACHE_SECONDS = int(os.getenv("CACHE_SECONDS", "15"))
 MEDIA_CACHE_SECONDS = int(os.getenv("MEDIA_CACHE_SECONDS", "60"))
-MOCK_FOLLOWERS_START = int(os.getenv("MOCK_FOLLOWERS_START", "0"))
+MOCK_FOLLOWERS_START = int(os.getenv("MOCK_FOLLOWERS_START", "19330"))
 
 FEATURED_DISH = os.getenv("FEATURED_DISH", "Tutano assado, queijo Tulha e steak tartare")
 FEATURED_PAIRING = os.getenv("FEATURED_PAIRING", "Uma experiência de gordura nobre, sal, textura e vinho")
@@ -74,7 +74,7 @@ def get_followers_count_cached():
     except Exception as exc:
         count = MOCK_FOLLOWERS_START
         source = "mock"
-        source_error = exc.__class__.__name__
+        source_error = str(exc)
     _cache.update({"ts": now, "followers_count": count, "source": source, "source_error": source_error})
     return count, source, _cache["ts"], _cache.get("source_error", "")
 
@@ -161,6 +161,11 @@ def vertical():
     return render_template("index.html", **template_payload(vertical=True))
 
 
+@app.route("/healthz")
+def healthz():
+    return jsonify(status="ok", app=BRAND_NAME)
+
+
 @app.route("/api/status")
 def api_status():
     count, source, _, source_error = get_followers_count_cached()
@@ -211,6 +216,10 @@ def qr_wine_png():
     return send_file(bio, mimetype="image/png")
 
 
+def main():
+    port = int(os.getenv("PORT", "8501"))
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+
+
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "5000"))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    main()

@@ -140,12 +140,12 @@ def render():
     menu_qr = qr_data_uri(MENU_SENSORIAL_URL)
     wine_qr = qr_data_uri(WINE_EXPLORER_URL)
     error_msg = media_result.get("error") or status.get("error") or ""
-    latest_empty = "Sem posts carregados. Verifique se o token possui instagram_basic e se USER_ACCESS_TOKEN está salvo no Streamlit Secrets."
+    latest_empty = "Sem posts carregados. Verifique se o token possui acesso à leitura de mídia e se USER_ACCESS_TOKEN está salvo no Streamlit Secrets."
     top_empty = "Sem dados de interação carregados. Assim que os posts forem lidos, esta área será preenchida automaticamente."
     latest_html = "".join(post_card(item, "Último post") for item in latest) or f'<div class="empty">{esc(latest_empty)}<br><small>{esc(error_msg)}</small></div>'
     top_html = "".join(post_card(item, "Maior interação") for item in top_posts) or f'<div class="empty">{esc(top_empty)}<br><small>{esc(error_msg)}</small></div>'
 
-    st.markdown(f"""
+    html_block = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');
 #MainMenu, footer, header {{visibility: hidden;}}
@@ -239,7 +239,8 @@ def render():
     </div>
   </div>
 </div>
-""", unsafe_allow_html=True)
+"""
+    st.markdown(html_block, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":

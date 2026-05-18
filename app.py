@@ -14,6 +14,7 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 LOCAL_LOGO = BASE_DIR / "yvora_logo.JPG"
+STATE_FILE = BASE_DIR / ".last_followers_count"
 
 PROFILE_URL = os.getenv("PROFILE_URL", "https://www.instagram.com/yvora.restaurante/")
 BRAND_NAME = os.getenv("BRAND_NAME", "YVORA")
@@ -22,12 +23,28 @@ FOLLOW_CTA = os.getenv("FOLLOW_CTA", "Siga nosso Instagram")
 GRAPH_VERSION = os.getenv("GRAPH_VERSION", "v25.0")
 USER_ACCESS_TOKEN = os.getenv("USER_ACCESS_TOKEN", "").strip()
 IG_BUSINESS_ID = os.getenv("IG_BUSINESS_ID", "17841445877381461").strip()
-CACHE_SECONDS = int(os.getenv("CACHE_SECONDS", "10"))
+CACHE_SECONDS = int(os.getenv("CACHE_SECONDS", "1"))
 MEDIA_CACHE_SECONDS = int(os.getenv("MEDIA_CACHE_SECONDS", "60"))
 MOCK_FOLLOWERS_START = int(os.getenv("MOCK_FOLLOWERS_START", "19330"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
 WINE_EXPLORER_URL = os.getenv("WINE_EXPLORER_URL", "https://yvora-wine.streamlit.app/")
 MENU_SENSORIAL_URL = os.getenv("MENU_SENSORIAL_URL", "https://yvora-menu-sensorial.streamlit.app/")
+
+
+def read_previous_count() -> int | None:
+    try:
+        if STATE_FILE.exists():
+            return int(STATE_FILE.read_text().strip())
+    except Exception:
+        return None
+    return None
+
+
+def write_previous_count(value: int) -> None:
+    try:
+        STATE_FILE.write_text(str(int(value)))
+    except Exception:
+        pass
 
 
 def file_data_uri(path: Path) -> str:
@@ -50,7 +67,6 @@ def graph_get(path: str, params: dict | None = None, timeout: int = 10) -> dict:
     return response.json()
 
 
-@st.cache_data(ttl=CACHE_SECONDS, show_spinner=False)
 def get_status() -> dict:
     try:
         data = graph_get(f"/{IG_BUSINESS_ID}", {"fields": "username,followers_count,media_count"})
@@ -111,9 +127,9 @@ def render():
     latest = media[:4]
     top_posts = sorted(media, key=lambda x: x.get("score", 0), reverse=True)[:4]
     current_count = int(status.get("followers_count", 0))
-    previous_count = st.session_state.get("last_followers_count")
-    delta = 0 if previous_count is None else current_count - int(previous_count)
-    st.session_state["last_followers_count"] = current_count
+    previous_count = read_previous_count()
+    delta = 0 if previous_count is None else current_count - previous_count
+    write_previous_count(current_count)
     followers = f"{current_count:,}".replace(",", ".")
     logo_uri = file_data_uri(LOCAL_LOGO)
     instagram_qr = qr_data_uri(PROFILE_URL)
@@ -123,8 +139,9 @@ def render():
     latest_html = "".join(post_card(item, "Último post") for item in latest) or f'<div class="empty">Sem posts carregados.<br><small>{esc(error_msg)}</small></div>'
     top_html = "".join(post_card(item, "Maior interação") for item in top_posts) or f'<div class="empty">Sem dados de interação carregados.<br><small>{esc(error_msg)}</small></div>'
     logo_html = f'<img src="{logo_uri}" class="logo-img" alt="YVORA">' if logo_uri else '<div class="logo-text">YVORA</div>'
-    burst_count = max(0, min(delta, 8))
-    burst_html = "".join([f'<div class="wine-burst w{i}">🍷</div>' for i in range(burst_count)])
+    should_burst = delta > 0
+    burst_count = 12 if should_burst else 0
+    burst_html = "".join([f'<div class="wine-burst w{i}">{"🍷" if i % 2 == 0 else "🥂"}</div>' for i in range(burst_count)])
     change_html = f'<div class="change positive">+{delta} novo seguidor</div>' if delta == 1 else (f'<div class="change positive">+{delta} novos seguidores</div>' if delta > 1 else "")
 
     css = f"""
@@ -173,9 +190,9 @@ def render():
 .empty small {{display:block; margin-top:8px; color:#a7672d; word-break:break-word;}}
 .stack {{display:flex; flex-direction:column; gap:18px;}}
 .footer-note {{margin-top:18px; color:#8e8074; font-size:12px;}}
-.wine-burst {{position:fixed; bottom:-30px; font-size:42px; z-index:999999; animation: wineFloat 4.2s ease-out forwards; pointer-events:none;}}
-.w0 {{left:12%; animation-delay:0s;}} .w1 {{left:22%; animation-delay:.12s;}} .w2 {{left:34%; animation-delay:.24s;}} .w3 {{left:46%; animation-delay:.36s;}} .w4 {{left:58%; animation-delay:.48s;}} .w5 {{left:70%; animation-delay:.60s;}} .w6 {{left:82%; animation-delay:.72s;}} .w7 {{left:90%; animation-delay:.84s;}}
-@keyframes wineFloat {{0% {{transform:translateY(0) scale(.65) rotate(-8deg); opacity:0;}} 12% {{opacity:1;}} 100% {{transform:translateY(-105vh) scale(1.25) rotate(14deg); opacity:0;}}}}
+.wine-burst {{position:fixed; bottom:-40px; font-size:48px; z-index:999999; animation: wineFloat 5s ease-out forwards; pointer-events:none; filter: drop-shadow(0 8px 10px rgba(0,0,0,.18));}}
+.w0 {{left:7%; animation-delay:0s;}} .w1 {{left:14%; animation-delay:.08s;}} .w2 {{left:22%; animation-delay:.16s;}} .w3 {{left:31%; animation-delay:.24s;}} .w4 {{left:40%; animation-delay:.32s;}} .w5 {{left:49%; animation-delay:.40s;}} .w6 {{left:58%; animation-delay:.48s;}} .w7 {{left:67%; animation-delay:.56s;}} .w8 {{left:76%; animation-delay:.64s;}} .w9 {{left:84%; animation-delay:.72s;}} .w10 {{left:91%; animation-delay:.80s;}} .w11 {{left:96%; animation-delay:.88s;}}
+@keyframes wineFloat {{0% {{transform:translateY(0) scale(.6) rotate(-10deg); opacity:0;}} 10% {{opacity:1;}} 78% {{opacity:1;}} 100% {{transform:translateY(-110vh) scale(1.35) rotate(18deg); opacity:0;}}}}
 @media (max-width:1100px) {{.grid {{grid-template-columns:1fr;}} .posts {{grid-template-columns:repeat(2, 1fr);}} .counter {{font-size:58px;}}}}
 </style>
 <meta http-equiv="refresh" content="{REFRESH_SECONDS}">

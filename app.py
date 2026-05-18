@@ -22,8 +22,10 @@ FOLLOW_CTA = os.getenv("FOLLOW_CTA", "Siga nosso Instagram")
 GRAPH_VERSION = os.getenv("GRAPH_VERSION", "v25.0")
 USER_ACCESS_TOKEN = os.getenv("USER_ACCESS_TOKEN", "").strip()
 IG_BUSINESS_ID = os.getenv("IG_BUSINESS_ID", "17841445877381461").strip()
-CACHE_SECONDS = int(os.getenv("CACHE_SECONDS", "30"))
+CACHE_SECONDS = int(os.getenv("CACHE_SECONDS", "10"))
+MEDIA_CACHE_SECONDS = int(os.getenv("MEDIA_CACHE_SECONDS", "60"))
 MOCK_FOLLOWERS_START = int(os.getenv("MOCK_FOLLOWERS_START", "19330"))
+REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
 WINE_EXPLORER_URL = os.getenv("WINE_EXPLORER_URL", "https://yvora-wine.streamlit.app/")
 MENU_SENSORIAL_URL = os.getenv("MENU_SENSORIAL_URL", "https://yvora-menu-sensorial.streamlit.app/")
 
@@ -57,7 +59,7 @@ def get_status() -> dict:
         return {"followers_count": MOCK_FOLLOWERS_START, "media_count": 34, "username": "yvora.restaurante", "source": "Fallback", "error": str(exc)}
 
 
-@st.cache_data(ttl=90, show_spinner=False)
+@st.cache_data(ttl=MEDIA_CACHE_SECONDS, show_spinner=False)
 def get_media() -> dict:
     result = {"items": [], "error": ""}
     try:
@@ -108,7 +110,11 @@ def render():
     media = media_result.get("items", [])
     latest = media[:4]
     top_posts = sorted(media, key=lambda x: x.get("score", 0), reverse=True)[:4]
-    followers = f"{status['followers_count']:,}".replace(",", ".")
+    current_count = int(status.get("followers_count", 0))
+    previous_count = st.session_state.get("last_followers_count")
+    delta = 0 if previous_count is None else current_count - int(previous_count)
+    st.session_state["last_followers_count"] = current_count
+    followers = f"{current_count:,}".replace(",", ".")
     logo_uri = file_data_uri(LOCAL_LOGO)
     instagram_qr = qr_data_uri(PROFILE_URL)
     menu_qr = qr_data_uri(MENU_SENSORIAL_URL)
@@ -117,60 +123,69 @@ def render():
     latest_html = "".join(post_card(item, "Último post") for item in latest) or f'<div class="empty">Sem posts carregados.<br><small>{esc(error_msg)}</small></div>'
     top_html = "".join(post_card(item, "Maior interação") for item in top_posts) or f'<div class="empty">Sem dados de interação carregados.<br><small>{esc(error_msg)}</small></div>'
     logo_html = f'<img src="{logo_uri}" class="logo-img" alt="YVORA">' if logo_uri else '<div class="logo-text">YVORA</div>'
+    burst_count = max(0, min(delta, 8))
+    burst_html = "".join([f'<div class="wine-burst w{i}">🍷</div>' for i in range(burst_count)])
+    change_html = f'<div class="change positive">+{delta} novo seguidor</div>' if delta == 1 else (f'<div class="change positive">+{delta} novos seguidores</div>' if delta > 1 else "")
 
-    css = """
+    css = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');
-#MainMenu, footer, header {visibility: hidden;}
-.stApp {background: #f7f0e7; color: #211915; font-family: 'Montserrat', sans-serif;}
-.block-container {padding: 24px 34px 22px 34px; max-width: 100%;}
-.shell {max-width: 1480px; margin: 0 auto;}
-.header {display:flex; justify-content:space-between; align-items:center; gap:24px; margin-bottom:22px;}
-.brand {display:flex; align-items:center; gap:18px;}
-.logo-box {width:86px; height:86px; border-radius:22px; background:#fff; border:1px solid #ddd0c0; display:flex; align-items:center; justify-content:center; overflow:hidden;}
-.logo-img {width:100%; height:100%; object-fit:contain; padding:7px;}
-.logo-text {font-size:22px; font-weight:800; letter-spacing:2px;}
-.title {font-size:42px; font-weight:800; letter-spacing:2px; color:#211915; line-height:1;}
-.subtitle {font-size:15px; color:#6f6257; margin-top:8px;}
-.pill {background:#fff; border:1px solid #ddd0c0; border-radius:999px; padding:12px 18px; color:#6f6257; font-size:14px; white-space:nowrap;}
-.grid {display:grid; grid-template-columns: 410px 1fr; gap:22px; align-items:start;}
-.card {background:#fffaf4; border:1px solid #ddd0c0; border-radius:24px; padding:24px; box-shadow:0 12px 30px rgba(57,43,35,.08);}
-.counter-label {font-size:13px; text-transform:uppercase; letter-spacing:2px; color:#a7672d; font-weight:800;}
-.counter {font-size:76px; line-height:1; font-weight:800; color:#211915; margin:14px 0 8px;}
-.handle {font-size:17px; color:#6f6257; font-weight:600;}
-.cta {font-size:19px; font-weight:700; margin-top:18px; color:#211915;}
-.main-qr {margin-top:22px; padding:18px; background:#fff; border:1px solid #eadfd1; border-radius:22px; text-align:center;}
-.main-qr img {width:250px; max-width:100%; display:block; margin:0 auto;}
-.main-qr-title {font-size:24px; font-weight:800; color:#211915; margin-top:12px;}
-.main-qr-subtitle {font-size:14px; color:#6f6257; margin-top:6px;}
-.metrics {display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:20px;}
-.metric {background:#f7f0e7; border-radius:16px; padding:14px; border:1px solid #eadfd1;}
-.metric b {display:block; font-size:22px; color:#211915;}
-.metric span {font-size:12px; color:#6f6257; text-transform:uppercase; letter-spacing:1px;}
-.small-qrs {display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-top:20px;}
-.qr {background:#fff; border:1px solid #eadfd1; border-radius:14px; padding:8px; text-align:center;}
-.qr img {width:100%; max-width:82px; display:block; margin:0 auto;}
-.qr span {font-size:10px; color:#6f6257; font-weight:700;}
-.section-title {font-size:22px; font-weight:800; color:#211915; margin:0 0 14px;}
-.posts {display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:14px;}
-.post {display:block; background:#fff; border:1px solid #eadfd1; border-radius:18px; overflow:hidden; text-decoration:none; color:#211915; min-height:310px;}
-.post img {width:100%; height:170px; object-fit:cover; display:block; background:#eadfd1;}
-.post-body {padding:12px;}
-.post-label {font-size:11px; color:#a7672d; font-weight:800; text-transform:uppercase; letter-spacing:1.3px;}
-.post-stats {font-size:13px; color:#6f6257; font-weight:700; margin-top:6px;}
-.post-caption {font-size:12px; color:#6f6257; line-height:1.35; margin-top:7px;}
-.empty {padding:22px; border:1px dashed #cdbdaa; border-radius:16px; color:#6f6257; font-size:14px;}
-.empty small {display:block; margin-top:8px; color:#a7672d; word-break:break-word;}
-.stack {display:flex; flex-direction:column; gap:18px;}
-.footer-note {margin-top:18px; color:#8e8074; font-size:12px;}
-@media (max-width:1100px) {.grid {grid-template-columns:1fr;} .posts {grid-template-columns:repeat(2, 1fr);} .counter {font-size:58px;}}
+#MainMenu, footer, header {{visibility: hidden;}}
+.stApp {{background: #f7f0e7; color: #211915; font-family: 'Montserrat', sans-serif;}}
+.block-container {{padding: 24px 34px 22px 34px; max-width: 100%;}}
+.shell {{max-width: 1480px; margin: 0 auto;}}
+.header {{display:flex; justify-content:space-between; align-items:center; gap:24px; margin-bottom:22px;}}
+.brand {{display:flex; align-items:center; gap:18px;}}
+.logo-box {{width:86px; height:86px; border-radius:22px; background:#fff; border:1px solid #ddd0c0; display:flex; align-items:center; justify-content:center; overflow:hidden;}}
+.logo-img {{width:100%; height:100%; object-fit:contain; padding:7px;}}
+.logo-text {{font-size:22px; font-weight:800; letter-spacing:2px;}}
+.title {{font-size:42px; font-weight:800; letter-spacing:2px; color:#211915; line-height:1;}}
+.subtitle {{font-size:15px; color:#6f6257; margin-top:8px;}}
+.pill {{background:#fff; border:1px solid #ddd0c0; border-radius:999px; padding:12px 18px; color:#6f6257; font-size:14px; white-space:nowrap;}}
+.grid {{display:grid; grid-template-columns: 410px 1fr; gap:22px; align-items:start;}}
+.card {{background:#fffaf4; border:1px solid #ddd0c0; border-radius:24px; padding:24px; box-shadow:0 12px 30px rgba(57,43,35,.08); position:relative; overflow:hidden;}}
+.counter-label {{font-size:13px; text-transform:uppercase; letter-spacing:2px; color:#a7672d; font-weight:800;}}
+.counter {{font-size:76px; line-height:1; font-weight:800; color:#211915; margin:14px 0 8px;}}
+.handle {{font-size:17px; color:#6f6257; font-weight:600;}}
+.change {{display:inline-block; margin-top:8px; padding:8px 12px; border-radius:999px; background:#f3e0c9; color:#8b4a19; font-size:13px; font-weight:800;}}
+.cta {{font-size:19px; font-weight:700; margin-top:18px; color:#211915;}}
+.main-qr {{margin-top:22px; padding:18px; background:#fff; border:1px solid #eadfd1; border-radius:22px; text-align:center;}}
+.main-qr img {{width:250px; max-width:100%; display:block; margin:0 auto;}}
+.main-qr-title {{font-size:24px; font-weight:800; color:#211915; margin-top:12px;}}
+.main-qr-subtitle {{font-size:14px; color:#6f6257; margin-top:6px;}}
+.metrics {{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:20px;}}
+.metric {{background:#f7f0e7; border-radius:16px; padding:14px; border:1px solid #eadfd1;}}
+.metric b {{display:block; font-size:22px; color:#211915;}}
+.metric span {{font-size:12px; color:#6f6257; text-transform:uppercase; letter-spacing:1px;}}
+.small-qrs {{display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-top:20px;}}
+.qr {{background:#fff; border:1px solid #eadfd1; border-radius:14px; padding:8px; text-align:center;}}
+.qr img {{width:100%; max-width:82px; display:block; margin:0 auto;}}
+.qr span {{font-size:10px; color:#6f6257; font-weight:700;}}
+.section-title {{font-size:22px; font-weight:800; color:#211915; margin:0 0 14px;}}
+.posts {{display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:14px;}}
+.post {{display:block; background:#fff; border:1px solid #eadfd1; border-radius:18px; overflow:hidden; text-decoration:none; color:#211915; min-height:310px;}}
+.post img {{width:100%; height:170px; object-fit:cover; display:block; background:#eadfd1;}}
+.post-body {{padding:12px;}}
+.post-label {{font-size:11px; color:#a7672d; font-weight:800; text-transform:uppercase; letter-spacing:1.3px;}}
+.post-stats {{font-size:13px; color:#6f6257; font-weight:700; margin-top:6px;}}
+.post-caption {{font-size:12px; color:#6f6257; line-height:1.35; margin-top:7px;}}
+.empty {{padding:22px; border:1px dashed #cdbdaa; border-radius:16px; color:#6f6257; font-size:14px;}}
+.empty small {{display:block; margin-top:8px; color:#a7672d; word-break:break-word;}}
+.stack {{display:flex; flex-direction:column; gap:18px;}}
+.footer-note {{margin-top:18px; color:#8e8074; font-size:12px;}}
+.wine-burst {{position:fixed; bottom:-30px; font-size:42px; z-index:999999; animation: wineFloat 4.2s ease-out forwards; pointer-events:none;}}
+.w0 {{left:12%; animation-delay:0s;}} .w1 {{left:22%; animation-delay:.12s;}} .w2 {{left:34%; animation-delay:.24s;}} .w3 {{left:46%; animation-delay:.36s;}} .w4 {{left:58%; animation-delay:.48s;}} .w5 {{left:70%; animation-delay:.60s;}} .w6 {{left:82%; animation-delay:.72s;}} .w7 {{left:90%; animation-delay:.84s;}}
+@keyframes wineFloat {{0% {{transform:translateY(0) scale(.65) rotate(-8deg); opacity:0;}} 12% {{opacity:1;}} 100% {{transform:translateY(-105vh) scale(1.25) rotate(14deg); opacity:0;}}}}
+@media (max-width:1100px) {{.grid {{grid-template-columns:1fr;}} .posts {{grid-template-columns:repeat(2, 1fr);}} .counter {{font-size:58px;}}}}
 </style>
+<meta http-equiv="refresh" content="{REFRESH_SECONDS}">
 """
     header_html = f"""
 <div class="shell">
+  {burst_html}
   <div class="header">
     <div class="brand"><div class="logo-box">{logo_html}</div><div><div class="title">{esc(BRAND_NAME)}</div><div class="subtitle">{esc(BRAND_SUBTITLE)} · @{esc(status.get('username'))}</div></div></div>
-    <div class="pill">{esc(status.get('source'))} · atualizado em {datetime.now().strftime('%d/%m %H:%M')}</div>
+    <div class="pill">{esc(status.get('source'))} · atualiza a cada {REFRESH_SECONDS}s · {datetime.now().strftime('%d/%m %H:%M:%S')}</div>
   </div>
   <div class="grid">
 """
@@ -179,6 +194,7 @@ def render():
   <div class="counter-label">Seguidores no Instagram</div>
   <div class="counter">{followers}</div>
   <div class="handle">@{esc(status.get('username'))}</div>
+  {change_html}
   <div class="main-qr"><img src="{instagram_qr}"><div class="main-qr-title">Siga nosso Instagram</div><div class="main-qr-subtitle">Aponte a câmera e acompanhe o YVORA</div></div>
   <div class="cta">{esc(FOLLOW_CTA)}</div>
   <div class="metrics"><div class="metric"><b>{int(status.get('media_count', 0))}</b><span>publicações</span></div><div class="metric"><b>{len(media)}</b><span>posts lidos</span></div></div>
@@ -193,7 +209,6 @@ def render():
 </div>
 """
     close_html = "</div></div>"
-
     st.markdown(css + header_html + left_html + right_html + close_html, unsafe_allow_html=True)
 
 

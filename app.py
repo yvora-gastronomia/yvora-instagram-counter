@@ -20,6 +20,7 @@ PROFILE_URL = os.getenv("PROFILE_URL", "https://www.instagram.com/yvora.restaura
 BRAND_NAME = os.getenv("BRAND_NAME", "YVORA")
 BRAND_SUBTITLE = os.getenv("BRAND_SUBTITLE", "Contador Instagram")
 FOLLOW_CTA = os.getenv("FOLLOW_CTA", "Siga nosso Instagram")
+WELCOME_MESSAGE = os.getenv("WELCOME_MESSAGE", "Bem-vindo à comunidade YVORA de experiências gastronômicas")
 GRAPH_VERSION = os.getenv("GRAPH_VERSION", "v25.0")
 USER_ACCESS_TOKEN = os.getenv("USER_ACCESS_TOKEN", "").strip()
 IG_BUSINESS_ID = os.getenv("IG_BUSINESS_ID", "17841445877381461").strip()
@@ -140,8 +141,9 @@ def render():
     top_html = "".join(post_card(item, "Maior interação") for item in top_posts) or f'<div class="empty">Sem dados de interação carregados.<br><small>{esc(error_msg)}</small></div>'
     logo_html = f'<img src="{logo_uri}" class="logo-img" alt="YVORA">' if logo_uri else '<div class="logo-text">YVORA</div>'
     should_burst = delta > 0
-    burst_count = 12 if should_burst else 0
-    burst_html = "".join([f'<div class="wine-burst w{i}">{"🍷" if i % 2 == 0 else "🥂"}</div>' for i in range(burst_count)])
+    celebration_emojis = ["🍷", "🇧🇷", "🍽️", "🥂", "🇧🇷", "🍷", "🍽️", "🥂", "🇧🇷", "🍷", "🍽️", "🥂"]
+    burst_html = "".join([f'<div class="celebration-burst w{i}">{celebration_emojis[i]}</div>' for i in range(len(celebration_emojis))]) if should_burst else ""
+    welcome_html = f'<div class="welcome-toast"><div class="welcome-kicker">Novo seguidor</div><div class="welcome-title">{esc(WELCOME_MESSAGE)}</div><div class="welcome-icons">🍷 · 🇧🇷 · 🍽️</div></div>' if should_burst else ""
     change_html = f'<div class="change positive">+{delta} novo seguidor</div>' if delta == 1 else (f'<div class="change positive">+{delta} novos seguidores</div>' if delta > 1 else "")
 
     css = f"""
@@ -190,15 +192,21 @@ def render():
 .empty small {{display:block; margin-top:8px; color:#a7672d; word-break:break-word;}}
 .stack {{display:flex; flex-direction:column; gap:18px;}}
 .footer-note {{margin-top:18px; color:#8e8074; font-size:12px;}}
-.wine-burst {{position:fixed; bottom:-40px; font-size:48px; z-index:999999; animation: wineFloat 5s ease-out forwards; pointer-events:none; filter: drop-shadow(0 8px 10px rgba(0,0,0,.18));}}
-.w0 {{left:7%; animation-delay:0s;}} .w1 {{left:14%; animation-delay:.08s;}} .w2 {{left:22%; animation-delay:.16s;}} .w3 {{left:31%; animation-delay:.24s;}} .w4 {{left:40%; animation-delay:.32s;}} .w5 {{left:49%; animation-delay:.40s;}} .w6 {{left:58%; animation-delay:.48s;}} .w7 {{left:67%; animation-delay:.56s;}} .w8 {{left:76%; animation-delay:.64s;}} .w9 {{left:84%; animation-delay:.72s;}} .w10 {{left:91%; animation-delay:.80s;}} .w11 {{left:96%; animation-delay:.88s;}}
-@keyframes wineFloat {{0% {{transform:translateY(0) scale(.6) rotate(-10deg); opacity:0;}} 10% {{opacity:1;}} 78% {{opacity:1;}} 100% {{transform:translateY(-110vh) scale(1.35) rotate(18deg); opacity:0;}}}}
-@media (max-width:1100px) {{.grid {{grid-template-columns:1fr;}} .posts {{grid-template-columns:repeat(2, 1fr);}} .counter {{font-size:58px;}}}}
+.welcome-toast {{position:fixed; top:34px; left:50%; transform:translateX(-50%); z-index:1000000; width:min(720px, 86vw); text-align:center; background:rgba(255,250,244,.96); border:1px solid #d7c6b2; border-radius:24px; padding:20px 26px; box-shadow:0 22px 60px rgba(57,43,35,.22); animation: welcomeToast 5.2s ease-out forwards;}}
+.welcome-kicker {{font-size:12px; text-transform:uppercase; letter-spacing:2.5px; color:#a7672d; font-weight:800; margin-bottom:8px;}}
+.welcome-title {{font-size:26px; line-height:1.25; color:#211915; font-weight:800;}}
+.welcome-icons {{font-size:26px; margin-top:8px;}}
+.celebration-burst {{position:fixed; bottom:-44px; font-size:46px; z-index:999999; animation: celebrationFloat 5.4s ease-out forwards; pointer-events:none; filter: drop-shadow(0 8px 10px rgba(0,0,0,.18));}}
+.w0 {{left:6%; animation-delay:0s;}} .w1 {{left:13%; animation-delay:.08s;}} .w2 {{left:21%; animation-delay:.16s;}} .w3 {{left:30%; animation-delay:.24s;}} .w4 {{left:39%; animation-delay:.32s;}} .w5 {{left:48%; animation-delay:.40s;}} .w6 {{left:57%; animation-delay:.48s;}} .w7 {{left:66%; animation-delay:.56s;}} .w8 {{left:75%; animation-delay:.64s;}} .w9 {{left:83%; animation-delay:.72s;}} .w10 {{left:91%; animation-delay:.80s;}} .w11 {{left:96%; animation-delay:.88s;}}
+@keyframes celebrationFloat {{0% {{transform:translateY(0) scale(.62) rotate(-10deg); opacity:0;}} 10% {{opacity:1;}} 78% {{opacity:1;}} 100% {{transform:translateY(-110vh) scale(1.32) rotate(18deg); opacity:0;}}}}
+@keyframes welcomeToast {{0% {{opacity:0; transform:translate(-50%, -18px) scale(.96);}} 12% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 78% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 100% {{opacity:0; transform:translate(-50%, -18px) scale(.98);}}}}
+@media (max-width:1100px) {{.grid {{grid-template-columns:1fr;}} .posts {{grid-template-columns:repeat(2, 1fr);}} .counter {{font-size:58px;}} .welcome-title {{font-size:20px;}}}}
 </style>
 <meta http-equiv="refresh" content="{REFRESH_SECONDS}">
 """
     header_html = f"""
 <div class="shell">
+  {welcome_html}
   {burst_html}
   <div class="header">
     <div class="brand"><div class="logo-box">{logo_html}</div><div><div class="title">{esc(BRAND_NAME)}</div><div class="subtitle">{esc(BRAND_SUBTITLE)} · @{esc(status.get('username'))}</div></div></div>

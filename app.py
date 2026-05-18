@@ -30,6 +30,14 @@ MOCK_FOLLOWERS_START = int(os.getenv("MOCK_FOLLOWERS_START", "19330"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
 WINE_EXPLORER_URL = os.getenv("WINE_EXPLORER_URL", "https://yvora-wine.streamlit.app/")
 MENU_SENSORIAL_URL = os.getenv("MENU_SENSORIAL_URL", "https://yvora-menu-sensorial.streamlit.app/")
+BRAZIL_FLAG_SVG = """
+<svg class='br-flag' viewBox='0 0 120 84' xmlns='http://www.w3.org/2000/svg' aria-label='Bandeira do Brasil'>
+  <rect width='120' height='84' rx='10' fill='#009739'/>
+  <path d='M60 10 L110 42 L60 74 L10 42 Z' fill='#FFDF00'/>
+  <circle cx='60' cy='42' r='18' fill='#002776'/>
+  <path d='M43 38 C53 34 67 34 77 39' stroke='white' stroke-width='4' fill='none'/>
+</svg>
+""".strip()
 
 
 def read_previous_count() -> int | None:
@@ -141,9 +149,10 @@ def render():
     top_html = "".join(post_card(item, "Maior interação") for item in top_posts) or f'<div class="empty">Sem dados de interação carregados.<br><small>{esc(error_msg)}</small></div>'
     logo_html = f'<img src="{logo_uri}" class="logo-img" alt="YVORA">' if logo_uri else '<div class="logo-text">YVORA</div>'
     should_burst = delta > 0
-    celebration_emojis = ["🍷", "🇧🇷", "🍽️", "🥂", "🇧🇷", "🍷", "🍽️", "🥂", "🇧🇷", "🍷", "🍽️", "🥂"]
-    burst_html = "".join([f'<div class="celebration-burst w{i}">{celebration_emojis[i]}</div>' for i in range(len(celebration_emojis))]) if should_burst else ""
-    welcome_html = f'<div class="welcome-toast"><div class="welcome-kicker">Novo seguidor</div><div class="welcome-title">{esc(WELCOME_MESSAGE)}</div><div class="welcome-icons">🍷 · 🇧🇷 · 🍽️</div></div>' if should_burst else ""
+    celebration_items = ["🍷", BRAZIL_FLAG_SVG, "🍽️", "🥂", BRAZIL_FLAG_SVG, "🍷", "🍽️", "🥂", BRAZIL_FLAG_SVG, "🍷", "🍽️", "🥂"]
+    burst_html = "".join([f'<div class="celebration-burst w{i}">{celebration_items[i]}</div>' for i in range(len(celebration_items))]) if should_burst else ""
+    welcome_icons = f"<span>🍷</span><span class='inline-br-flag'>{BRAZIL_FLAG_SVG}</span><span>🍽️</span>"
+    welcome_html = f'<div class="welcome-toast"><div class="welcome-kicker">Novo seguidor</div><div class="welcome-title">{esc(WELCOME_MESSAGE)}</div><div class="welcome-icons">{welcome_icons}</div></div>' if should_burst else ""
     change_html = f'<div class="change positive">+{delta} novo seguidor</div>' if delta == 1 else (f'<div class="change positive">+{delta} novos seguidores</div>' if delta > 1 else "")
 
     css = f"""
@@ -192,14 +201,17 @@ def render():
 .empty small {{display:block; margin-top:8px; color:#a7672d; word-break:break-word;}}
 .stack {{display:flex; flex-direction:column; gap:18px;}}
 .footer-note {{margin-top:18px; color:#8e8074; font-size:12px;}}
-.welcome-toast {{position:fixed; top:34px; left:50%; transform:translateX(-50%); z-index:1000000; width:min(720px, 86vw); text-align:center; background:rgba(255,250,244,.96); border:1px solid #d7c6b2; border-radius:24px; padding:20px 26px; box-shadow:0 22px 60px rgba(57,43,35,.22); animation: welcomeToast 5.2s ease-out forwards;}}
+.welcome-toast {{position:fixed; top:34px; left:50%; transform:translateX(-50%); z-index:1000000; width:min(720px, 86vw); text-align:center; background:rgba(255,250,244,.96); border:1px solid #d7c6b2; border-radius:24px; padding:20px 26px; box-shadow:0 22px 60px rgba(57,43,35,.22); animation: welcomeToast 7.2s ease-out forwards;}}
 .welcome-kicker {{font-size:12px; text-transform:uppercase; letter-spacing:2.5px; color:#a7672d; font-weight:800; margin-bottom:8px;}}
 .welcome-title {{font-size:26px; line-height:1.25; color:#211915; font-weight:800;}}
-.welcome-icons {{font-size:26px; margin-top:8px;}}
-.celebration-burst {{position:fixed; bottom:-44px; font-size:46px; z-index:999999; animation: celebrationFloat 5.4s ease-out forwards; pointer-events:none; filter: drop-shadow(0 8px 10px rgba(0,0,0,.18));}}
-.w0 {{left:6%; animation-delay:0s;}} .w1 {{left:13%; animation-delay:.08s;}} .w2 {{left:21%; animation-delay:.16s;}} .w3 {{left:30%; animation-delay:.24s;}} .w4 {{left:39%; animation-delay:.32s;}} .w5 {{left:48%; animation-delay:.40s;}} .w6 {{left:57%; animation-delay:.48s;}} .w7 {{left:66%; animation-delay:.56s;}} .w8 {{left:75%; animation-delay:.64s;}} .w9 {{left:83%; animation-delay:.72s;}} .w10 {{left:91%; animation-delay:.80s;}} .w11 {{left:96%; animation-delay:.88s;}}
-@keyframes celebrationFloat {{0% {{transform:translateY(0) scale(.62) rotate(-10deg); opacity:0;}} 10% {{opacity:1;}} 78% {{opacity:1;}} 100% {{transform:translateY(-110vh) scale(1.32) rotate(18deg); opacity:0;}}}}
-@keyframes welcomeToast {{0% {{opacity:0; transform:translate(-50%, -18px) scale(.96);}} 12% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 78% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 100% {{opacity:0; transform:translate(-50%, -18px) scale(.98);}}}}
+.welcome-icons {{font-size:26px; margin-top:8px; display:flex; align-items:center; justify-content:center; gap:14px;}}
+.inline-br-flag {{display:inline-flex; width:38px; height:27px; align-items:center; justify-content:center;}}
+.br-flag {{width:100%; height:100%; display:block;}}
+.celebration-burst {{position:fixed; bottom:-44px; font-size:46px; z-index:999999; animation: celebrationFloat 7.8s ease-out forwards; pointer-events:none; filter: drop-shadow(0 8px 10px rgba(0,0,0,.18)); width:52px; height:52px; display:flex; align-items:center; justify-content:center;}}
+.celebration-burst .br-flag {{width:52px; height:36px; border-radius:6px;}}
+.w0 {{left:6%; animation-delay:0s;}} .w1 {{left:13%; animation-delay:.16s;}} .w2 {{left:21%; animation-delay:.32s;}} .w3 {{left:30%; animation-delay:.48s;}} .w4 {{left:39%; animation-delay:.64s;}} .w5 {{left:48%; animation-delay:.80s;}} .w6 {{left:57%; animation-delay:.96s;}} .w7 {{left:66%; animation-delay:1.12s;}} .w8 {{left:75%; animation-delay:1.28s;}} .w9 {{left:83%; animation-delay:1.44s;}} .w10 {{left:91%; animation-delay:1.60s;}} .w11 {{left:96%; animation-delay:1.76s;}}
+@keyframes celebrationFloat {{0% {{transform:translateY(0) scale(.58) rotate(-8deg); opacity:0;}} 12% {{opacity:1;}} 82% {{opacity:1;}} 100% {{transform:translateY(-110vh) scale(1.24) rotate(12deg); opacity:0;}}}}
+@keyframes welcomeToast {{0% {{opacity:0; transform:translate(-50%, -18px) scale(.96);}} 12% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 82% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 100% {{opacity:0; transform:translate(-50%, -18px) scale(.98);}}}}
 @media (max-width:1100px) {{.grid {{grid-template-columns:1fr;}} .posts {{grid-template-columns:repeat(2, 1fr);}} .counter {{font-size:58px;}} .welcome-title {{font-size:20px;}}}}
 </style>
 <meta http-equiv="refresh" content="{REFRESH_SECONDS}">

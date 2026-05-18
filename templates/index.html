@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ brand_name }} Social Wall</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at top, #2b2118 0%, #0d0d0d 55%);
+      color: #f5efe7;
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.15), rgba(0,0,0,0.65));
+      pointer-events: none;
+    }
+
+    .container {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 40px;
+      padding: 50px;
+      height: 100vh;
+    }
+
+    .left {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .logo {
+      font-size: 72px;
+      letter-spacing: 10px;
+      color: #d6ab67;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      font-size: 26px;
+      margin-top: 10px;
+      color: #f3e6d2;
+      max-width: 720px;
+      line-height: 1.4;
+    }
+
+    .counter-box {
+      margin-top: 40px;
+      padding: 40px;
+      border: 1px solid rgba(214,171,103,0.35);
+      border-radius: 28px;
+      background: rgba(255,255,255,0.04);
+      backdrop-filter: blur(8px);
+    }
+
+    .counter-label {
+      color: #d6ab67;
+      font-size: 20px;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+    }
+
+    .counter {
+      font-size: 120px;
+      font-weight: 700;
+      margin-top: 15px;
+    }
+
+    .cta {
+      margin-top: 20px;
+      font-size: 24px;
+      color: #f3e6d2;
+    }
+
+    .dish-box {
+      margin-top: 35px;
+      padding: 30px;
+      border-left: 4px solid #d6ab67;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .dish-title {
+      font-size: 34px;
+      margin-bottom: 12px;
+      color: #fff;
+    }
+
+    .dish-text {
+      font-size: 20px;
+      line-height: 1.6;
+      color: #e5d7c3;
+    }
+
+    .right {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .qr-group {
+      display: flex;
+      gap: 30px;
+      width: 100%;
+      justify-content: center;
+    }
+
+    .qr-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(214,171,103,0.25);
+      padding: 22px;
+      border-radius: 24px;
+      text-align: center;
+      width: 220px;
+    }
+
+    .qr-card img {
+      width: 100%;
+      border-radius: 12px;
+      background: white;
+      padding: 10px;
+    }
+
+    .qr-card p {
+      margin-top: 16px;
+      font-size: 18px;
+      color: #f5efe7;
+    }
+
+    .floating-wine {
+      position: absolute;
+      bottom: -40px;
+      font-size: 38px;
+      animation: floatUp 6s linear forwards;
+      opacity: 0;
+    }
+
+    @keyframes floatUp {
+      0% {
+        transform: translateY(0) scale(0.7);
+        opacity: 0;
+      }
+      15% {
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(-110vh) rotate(10deg) scale(1.2);
+        opacity: 0;
+      }
+    }
+
+    .footer {
+      font-size: 16px;
+      opacity: 0.6;
+      margin-top: 20px;
+    }
+
+    .media-highlight {
+      width: 100%;
+      margin-top: 20px;
+      border-radius: 24px;
+      overflow: hidden;
+      border: 1px solid rgba(214,171,103,0.25);
+      background: rgba(255,255,255,0.04);
+      min-height: 280px;
+    }
+
+    .media-highlight img {
+      width: 100%;
+      height: 280px;
+      object-fit: cover;
+    }
+
+    .media-caption {
+      padding: 18px;
+      font-size: 16px;
+      line-height: 1.5;
+      color: #f3e6d2;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="overlay"></div>
+
+  <div class="container">
+    <div class="left">
+      <div>
+        <div class="logo">{{ brand_name }}</div>
+        <div class="subtitle">{{ brand_subtitle }}</div>
+
+        <div class="counter-box">
+          <div class="counter-label">Seguidores brindando com o YVORA</div>
+          <div class="counter" id="followers">0</div>
+          <div class="cta">{{ follow_cta }}</div>
+        </div>
+
+        <div class="dish-box">
+          <div class="dish-title">{{ featured_dish }}</div>
+          <div class="dish-text">{{ featured_pairing }}</div>
+        </div>
+      </div>
+
+      <div class="footer">
+        Rua dos Pinheiros • São Paulo • Experimente, combine, descubra.
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="qr-group">
+        <div class="qr-card">
+          <img src="/qr.png" alt="Instagram QR">
+          <p>Instagram</p>
+        </div>
+
+        <div class="qr-card">
+          <img src="/qr-menu.png" alt="Menu Sensorial">
+          <p>Menu Sensorial</p>
+        </div>
+
+        <div class="qr-card">
+          <img src="/qr-wine.png" alt="Wine Explorer">
+          <p>Wine Explorer</p>
+        </div>
+      </div>
+
+      <div class="media-highlight">
+        <img id="highlight-image" src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=1200&auto=format&fit=crop" alt="YVORA">
+        <div class="media-caption" id="caption">
+          Explore pratos, harmonizações e experiências sensoriais do YVORA.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let previousFollowers = 0;
+
+    async function refreshStatus() {
+      try {
+        const response = await fetch('/api/status');
+        const data = await response.json();
+
+        document.getElementById('followers').innerText = data.followers_count.toLocaleString('pt-BR');
+
+        if (previousFollowers && data.followers_count > previousFollowers) {
+          launchWineAnimation();
+        }
+
+        previousFollowers = data.followers_count;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function refreshMedia() {
+      try {
+        const response = await fetch('/api/media');
+        const data = await response.json();
+
+        const reel = data.media.featured_reel || data.media.last_post;
+
+        if (reel && reel.thumb_url) {
+          document.getElementById('highlight-image').src = reel.thumb_url;
+          document.getElementById('caption').innerText = reel.caption || 'Experiência YVORA';
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function launchWineAnimation() {
+      for (let i = 0; i < 12; i++) {
+        const wine = document.createElement('div');
+        wine.className = 'floating-wine';
+        wine.innerText = Math.random() > 0.5 ? '🍷' : '🥂';
+        wine.style.left = Math.random() * 100 + 'vw';
+        wine.style.animationDuration = (4 + Math.random() * 4) + 's';
+        document.body.appendChild(wine);
+
+        setTimeout(() => {
+          wine.remove();
+        }, 7000);
+      }
+    }
+
+    refreshStatus();
+    refreshMedia();
+
+    setInterval(refreshStatus, 15000);
+    setInterval(refreshMedia, 30000);
+  </script>
+</body>
+</html>

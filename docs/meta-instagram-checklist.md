@@ -21,38 +21,50 @@ Ativo conectado encontrado:
 INSTAGRAM_USERNAME=yvora.restaurante
 ```
 
-No Graph API Explorer, foi possível adicionar:
+No Graph API Explorer, o token atual permite:
 
 ```text
 pages_show_list
 pages_read_engagement
 business_management
-instagram_basic
 ```
 
-Mas `instagram_manage_insights` não aparece como opção disponível para esse app/token.
+Mas a interface não está permitindo manter/adicionar `instagram_basic` no token atual. Isso indica que o app ainda não possui um caso de uso/produto do Instagram habilitado, ou que o Graph API Explorer está preso em um tipo de token que não aceita essa permissão.
 
-## Decisão operacional
+## Próximo passo: habilitar caso de uso do Instagram no app
 
-Para este app, o campo principal necessário é `followers_count`, que pode ser testado com `instagram_basic` quando a conta é Instagram profissional conectada à Página.
-
-Portanto, o próximo passo é seguir sem `instagram_manage_insights` e gerar um novo token com as permissões disponíveis.
-
-## Próximo passo no Graph API Explorer
-
-1. Manter selecionadas as permissões disponíveis:
+No painel do app `YVORA Social Wall`, verificar:
 
 ```text
-pages_show_list
-pages_read_engagement
-business_management
+Casos de uso
+```
+
+Adicionar um caso de uso relacionado a um destes nomes, conforme disponível na interface da Meta:
+
+```text
+Instagram Graph API
+Business Login
+Login do Facebook para Empresas
+Gerenciar ativos empresariais
+```
+
+Depois voltar ao Graph API Explorer e tentar adicionar novamente:
+
+```text
 instagram_basic
 ```
 
-2. Clicar em **Generate Access Token** novamente.
-3. Autorizar a Página YVORA e o Instagram `yvora.restaurante` se aparecerem na janela de autorização.
+## Alternativa se a permissão continuar indisponível
 
-## Consultas para repetir
+Tentar trocar o tipo em:
+
+```text
+Usuário ou Página
+```
+
+De `Token do usuário` para a Página `YVORA`, se a opção aparecer. Depois gerar token novamente.
+
+## Consultas para repetir quando `instagram_basic` estiver no token
 
 1. Confirmar páginas:
 
@@ -66,7 +78,7 @@ me/accounts
 1132788549914321?fields=name,instagram_business_account,connected_instagram_account
 ```
 
-3. Tentar pelo Business ID se a consulta da Página ainda não trouxer o Instagram:
+3. Tentar pelo Business ID:
 
 ```text
 1670523267724041/owned_instagram_accounts?fields=id,username,followers_count
@@ -83,27 +95,6 @@ me/accounts
 ```text
 IG_BUSINESS_ID?fields=username,followers_count,media_count
 ```
-
-O retorno esperado é:
-
-```json
-{
-  "username": "yvora.restaurante",
-  "followers_count": 19300,
-  "media_count": 0,
-  "id": "1784..."
-}
-```
-
-## Se ainda não retornar o Instagram
-
-Verificar no painel do app:
-
-```text
-Casos de uso > Login do Facebook para Empresas
-```
-
-ou adicionar um caso de uso relacionado a Instagram/Business Login, porque algumas telas novas da Meta escondem permissões por caso de uso.
 
 ## Variáveis finais para deploy
 

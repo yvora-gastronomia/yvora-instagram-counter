@@ -3,6 +3,7 @@ from datetime import datetime
 from io import BytesIO
 import base64
 import html
+from pathlib import Path
 
 import qrcode
 import requests
@@ -10,6 +11,9 @@ import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
+
+BASE_DIR = Path(__file__).resolve().parent
+LOCAL_LOGO = BASE_DIR / "yvora_logo.JPG"
 
 PROFILE_URL = os.getenv("PROFILE_URL", "https://www.instagram.com/yvora.restaurante/")
 BRAND_NAME = os.getenv("BRAND_NAME", "YVORA")
@@ -26,6 +30,19 @@ FEATURED_PAIRING = os.getenv("FEATURED_PAIRING", "Uma experiência de gordura no
 WINE_EXPLORER_URL = os.getenv("WINE_EXPLORER_URL", "https://yvora-wine.streamlit.app/")
 MENU_SENSORIAL_URL = os.getenv("MENU_SENSORIAL_URL", "https://yvora-menu-sensorial.streamlit.app/")
 LOGO_URL = os.getenv("LOGO_URL", "")
+
+
+def file_data_uri(path: Path) -> str:
+    if not path.exists():
+        return ""
+    mime = "image/jpeg" if path.suffix.lower() in [".jpg", ".jpeg"] else "image/png"
+    return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode("utf-8")
+
+
+def logo_src() -> str:
+    if LOGO_URL:
+        return LOGO_URL
+    return file_data_uri(LOCAL_LOGO)
 
 
 def graph_get(path: str, params: dict | None = None, timeout: int = 10) -> dict:
@@ -72,6 +89,8 @@ def get_media() -> list[dict]:
             media_type = item.get("media_type") or ""
             thumb = item.get("thumbnail_url") if media_type == "VIDEO" else item.get("media_url")
             caption = (item.get("caption") or "").strip()
+            if not thumb:
+                continue
             items.append({
                 "id": item.get("id", ""),
                 "caption": caption[:180],
@@ -131,7 +150,8 @@ def render():
     wine_qr = qr_data_uri(WINE_EXPLORER_URL)
     hero_img = esc(hero.get("thumb_url") or "")
     hero_caption = esc(hero.get("caption") or "Os últimos conteúdos do YVORA aparecerão aqui assim que o token permitir leitura de mídia.")
-    logo_html = f'<img class="brand-logo-img" src="{esc(LOGO_URL)}" alt="YVORA">' if LOGO_URL else '<div class="brand-logo-text">YVORA</div>'
+    logo = logo_src()
+    logo_html = f'<img class="brand-logo-img" src="{esc(logo)}" alt="YVORA">' if logo else '<div class="brand-logo-text">YVORA</div>'
     latest_html = "".join(media_card(item, "Último post") for item in latest) or '<div class="empty-card">Configure USER_ACCESS_TOKEN para carregar os últimos posts do Instagram.</div>'
     top_html = "".join(media_card(item, "Maior interação") for item in top_posts) or '<div class="empty-card">Os posts de maior interação aparecerão aqui.</div>'
 
@@ -144,8 +164,8 @@ def render():
 .yvora-shell {{min-height: 90vh; border: 1px solid #D7CFC3; border-radius: 30px; padding: 28px; background: linear-gradient(135deg, #faf6ef 0%, #efe7dd 50%, #f5efe7 100%); box-shadow: 0 24px 70px rgba(71,55,46,.12);}}
 .topbar {{display: flex; justify-content: space-between; align-items: center; gap: 24px; border-bottom: 1px solid #D7CFC3; padding-bottom: 18px;}}
 .brand {{display: flex; align-items: center; gap: 18px;}}
-.brand-mark {{width: 82px; height: 82px; border-radius: 50%; background: #F3EADF; border: 1px solid #C8B7A3; display:flex; align-items:center; justify-content:center; overflow:hidden;}}
-.brand-logo-img {{width: 100%; height: 100%; object-fit: contain; padding: 8px;}}
+.brand-mark {{width: 92px; height: 92px; border-radius: 50%; background: #F3EADF; border: 1px solid #C8B7A3; display:flex; align-items:center; justify-content:center; overflow:hidden;}}
+.brand-logo-img {{width: 100%; height: 100%; object-fit: contain; padding: 6px;}}
 .brand-logo-text {{font-family: 'Cormorant Garamond', serif; color: #47372E; font-size: 24px; letter-spacing: 2px; font-weight: 700;}}
 .brand-title {{font-family: 'Cormorant Garamond', serif; font-size: 62px; letter-spacing: 7px; color: #47372E; line-height: .9;}}
 .brand-subtitle {{font-family: 'Montserrat', sans-serif; font-size: 17px; color: #7A685B; margin-top: 8px;}}
@@ -165,6 +185,7 @@ def render():
 .section-title {{font-family:'Cormorant Garamond', serif; font-size:34px; color:#47372E; margin-bottom:14px;}}
 .hero {{display:grid; grid-template-columns:.95fr 1.05fr; gap:18px; align-items:stretch;}}
 .hero-img {{width:100%; height:310px; object-fit:cover; border-radius:22px; background:#E7DDD2;}}
+.hero-img[src=""] {{display:none;}}
 .hero-copy {{font-family:'Montserrat', sans-serif; color:#7A685B; font-size:18px; line-height:1.55; border-left:3px solid #B06F2F; padding-left:18px;}}
 .posts-grid {{display:grid; grid-template-columns: repeat(3, 1fr); gap:16px; margin-top:14px;}}
 .post-card {{display:block; text-decoration:none; color:#47372E; background:#faf6ef; border:1px solid #D7CFC3; border-radius:20px; overflow:hidden; min-height: 330px;}}

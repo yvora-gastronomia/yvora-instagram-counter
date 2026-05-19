@@ -84,6 +84,22 @@ def drive_image_url(url: str) -> str:
     return text
 
 
+def image_data_uri_from_url(url: str) -> str:
+    final_url = drive_image_url(url)
+    if not final_url:
+        return ""
+    try:
+        response = requests.get(final_url, timeout=12)
+        response.raise_for_status()
+        content_type = response.headers.get("content-type", "image/jpeg").split(";")[0]
+        if "image" not in content_type:
+            content_type = "image/jpeg"
+        encoded = base64.b64encode(response.content).decode("utf-8")
+        return f"data:{content_type};base64,{encoded}"
+    except Exception:
+        return final_url
+
+
 def graph_get(path: str, params: dict | None = None, timeout: int = 10) -> dict:
     if not USER_ACCESS_TOKEN:
         raise RuntimeError("USER_ACCESS_TOKEN vazio no ambiente")
@@ -145,7 +161,7 @@ def get_partners() -> list[dict]:
                 order = int(float(order_raw.replace(",", ".")))
             except Exception:
                 order = 999
-            partners.append({"name": name, "image": drive_image_url(image), "order": order})
+            partners.append({"name": name, "image": image_data_uri_from_url(image), "order": order})
         return sorted(partners, key=lambda x: (x["order"], x["name"]))
     except Exception:
         return []

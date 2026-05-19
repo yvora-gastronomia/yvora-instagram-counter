@@ -1,29 +1,86 @@
 import os
-import time
 from datetime import datetime
 from io import BytesIO
+import base64
+import html
+import re
+from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import qrcode
 import requests
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 from dotenv import load_dotenv
 
 load_dotenv()
 
+BASE_DIR = Path(__file__).resolve().parent
+LOCAL_LOGO = BASE_DIR / "yvora_logo.JPG"
+STATE_FILE = BASE_DIR / ".last_followers_count"
+SAO_PAULO_TZ = ZoneInfo("America/Sao_Paulo")
+
 PROFILE_URL = os.getenv("PROFILE_URL", "https://www.instagram.com/yvora.restaurante/")
 BRAND_NAME = os.getenv("BRAND_NAME", "YVORA")
-BRAND_SUBTITLE = os.getenv("BRAND_SUBTITLE", "Carnes, queijos e vinhos em uma jornada sensorial")
-FOLLOW_CTA = os.getenv("FOLLOW_CTA", "Explore o universo YVORA")
+WELCOME_MESSAGE = os.getenv("WELCOME_MESSAGE", "Bem-vindo à comunidade YVORA de experiências gastronômicas")
 GRAPH_VERSION = os.getenv("GRAPH_VERSION", "v25.0")
 USER_ACCESS_TOKEN = os.getenv("USER_ACCESS_TOKEN", "").strip()
 IG_BUSINESS_ID = os.getenv("IG_BUSINESS_ID", "17841445877381461").strip()
-MILESTONE_TARGET = int(os.getenv("MILESTONE_TARGET", "20000"))
-CACHE_SECONDS = int(os.getenv("CACHE_SECONDS", "15"))
+MEDIA_CACHE_SECONDS = int(os.getenv("MEDIA_CACHE_SECONDS", "60"))
+PARTNERS_CACHE_SECONDS = int(os.getenv("PARTNERS_CACHE_SECONDS", "60"))
 MOCK_FOLLOWERS_START = int(os.getenv("MOCK_FOLLOWERS_START", "19330"))
-FEATURED_DISH = os.getenv("FEATURED_DISH", "Tutano assado, queijo Tulha e steak tartare")
-FEATURED_PAIRING = os.getenv("FEATURED_PAIRING", "Uma experiência de gordura nobre, sal, textura e vinho")
+REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
 WINE_EXPLORER_URL = os.getenv("WINE_EXPLORER_URL", "https://yvora-wine.streamlit.app/")
 MENU_SENSORIAL_URL = os.getenv("MENU_SENSORIAL_URL", "https://yvora-menu-sensorial.streamlit.app/")
+PARTNERS_SHEET_ID = os.getenv("PARTNERS_SHEET_ID", "1s1dGQZGG1A5M-6yD5fyggy4otmS8zQFl_GRBOiU32CI")
+PARTNERS_SHEET_NAME = os.getenv("PARTNERS_SHEET_NAME", "Sheet1")
+BRAZIL_FLAG_SVG = """
+<svg class='br-flag' viewBox='0 0 120 84' xmlns='http://www.w3.org/2000/svg' aria-label='Bandeira do Brasil'>
+  <rect width='120' height='84' rx='10' fill='#009739'/>
+  <path d='M60 10 L110 42 L60 74 L10 42 Z' fill='#FFDF00'/>
+  <circle cx='60' cy='42' r='18' fill='#002776'/>
+  <path d='M43 38 C53 34 67 34 77 39' stroke='white' stroke-width='4' fill='none'/>
+</svg>
+""".strip()
+
+
+def now_sp() -> datetime:
+    return datetime.now(SAO_PAULO_TZ)
+
+
+def read_previous_count() -> int | None:
+    try:
+        if STATE_FILE.exists():
+            return int(STATE_FILE.read_text().strip())
+    except Exception:
+        return None
+    return None
+
+
+def write_previous_count(value: int) -> None:
+    try:
+        STATE_FILE.write_text(str(int(value)))
+    except Exception:
+        pass
+
+
+def file_data_uri(path: Path) -> str:
+    if not path.exists():
+        return ""
+    mime = "image/jpeg" if path.suffix.lower() in [".jpg", ".jpeg"] else "image/png"
+    return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode("utf-8")
+
+
+def drive_image_url(url: str) -> str:
+    text = str(url or "").strip()
+    if not text:
+        return ""
+    patterns = [r"/file/d/([a-zA-Z0-9_-]+)", r"id=([a-zA-Z0-9_-]+)", r"/d/([a-zA-Z0-9_-]+)"]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return f"https://drive.google.com/thumbnail?id={match.group(1)}&sz=w1600"
+    return text
 
 
 def graph_get(path: str, params: dict | None = None, timeout: int = 10) -> dict:
@@ -39,129 +96,233 @@ def graph_get(path: str, params: dict | None = None, timeout: int = 10) -> dict:
     return response.json()
 
 
-@st.cache_data(ttl=CACHE_SECONDS, show_spinner=False)
 def get_status() -> dict:
     try:
         data = graph_get(f"/{IG_BUSINESS_ID}", {"fields": "username,followers_count,media_count"})
-        return {
-            "followers_count": int(data.get("followers_count", 0)),
-            "media_count": int(data.get("media_count", 0)),
-            "username": data.get("username", "yvora.restaurante"),
-            "source": "meta",
-            "error": "",
-        }
+        return {"followers_count": int(data.get("followers_count", 0)), "media_count": int(data.get("media_count", 0)), "username": data.get("username", "yvora.restaurante"), "source": "Meta API", "error": ""}
     except Exception as exc:
-        return {
-            "followers_count": MOCK_FOLLOWERS_START,
-            "media_count": 34,
-            "username": "yvora.restaurante",
-            "source": "mock",
-            "error": str(exc),
-        }
+        return {"followers_count": MOCK_FOLLOWERS_START, "media_count": 34, "username": "yvora.restaurante", "source": "Fallback", "error": str(exc)}
 
 
-@st.cache_data(ttl=60, show_spinner=False)
-def get_media() -> list[dict]:
+@st.cache_data(ttl=MEDIA_CACHE_SECONDS, show_spinner=False)
+def get_media() -> dict:
+    result = {"items": [], "error": ""}
     try:
         fields = "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count,thumbnail_url"
-        data = graph_get(f"/{IG_BUSINESS_ID}/media", {"fields": fields, "limit": "12"}, timeout=12)
-        items = []
+        data = graph_get(f"/{IG_BUSINESS_ID}/media", {"fields": fields, "limit": "18"}, timeout=15)
         for item in data.get("data", []) or []:
             media_type = item.get("media_type") or ""
-            thumb = item.get("thumbnail_url") if media_type == "VIDEO" else item.get("media_url")
-            items.append({
-                "caption": (item.get("caption") or "").strip()[:220],
-                "media_type": media_type,
-                "thumb_url": thumb or item.get("media_url") or "",
-                "permalink": item.get("permalink") or "",
-                "like_count": int(item.get("like_count") or 0),
-                "comments_count": int(item.get("comments_count") or 0),
-            })
-        return items
+            image = item.get("thumbnail_url") if media_type == "VIDEO" else item.get("media_url")
+            if not image:
+                continue
+            likes = int(item.get("like_count") or 0)
+            comments = int(item.get("comments_count") or 0)
+            result["items"].append({"caption": (item.get("caption") or "").strip()[:130], "media_type": media_type, "image": image, "permalink": item.get("permalink") or PROFILE_URL, "like_count": likes, "comments_count": comments, "score": likes + comments * 3})
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
+
+
+@st.cache_data(ttl=PARTNERS_CACHE_SECONDS, show_spinner=False)
+def get_partners() -> list[dict]:
+    try:
+        csv_url = f"https://docs.google.com/spreadsheets/d/{PARTNERS_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={PARTNERS_SHEET_NAME}"
+        response = requests.get(csv_url, timeout=10)
+        response.raise_for_status()
+        import csv
+        from io import StringIO
+        rows = list(csv.DictReader(StringIO(response.text)))
+        partners = []
+        for row in rows:
+            name = (row.get("Parceiros") or row.get("parceiros") or row.get("Nome") or row.get("nome") or "").strip()
+            image = (row.get("URL") or row.get("url") or row.get("Imagem") or row.get("imagem") or "").strip()
+            active = str(row.get("Ativo") or row.get("ativo") or "0").strip()
+            order_raw = str(row.get("Ordem") or row.get("ordem") or "999").strip()
+            if active != "1" or not name or not image:
+                continue
+            try:
+                order = int(float(order_raw.replace(",", ".")))
+            except Exception:
+                order = 999
+            partners.append({"name": name, "image": drive_image_url(image), "order": order})
+        return sorted(partners, key=lambda x: (x["order"], x["name"]))
     except Exception:
         return []
+
+
+def esc(value: str) -> str:
+    return html.escape(str(value or ""))
 
 
 def qr_data_uri(url: str) -> str:
     img = qrcode.make(url)
     bio = BytesIO()
     img.save(bio, format="PNG")
-    import base64
     return "data:image/png;base64," + base64.b64encode(bio.getvalue()).decode("utf-8")
 
 
+def post_card(item: dict, label: str) -> str:
+    media_type = "Reel" if item.get("media_type") == "VIDEO" else "Post"
+    return f"""
+<a class="post" href="{esc(item.get('permalink') or PROFILE_URL)}" target="_blank">
+  <img src="{esc(item.get('image'))}" alt="Post YVORA">
+  <div class="post-body">
+    <div class="post-label">{esc(label)} · {media_type}</div>
+    <div class="post-stats">♥ {int(item.get('like_count') or 0)} · 💬 {int(item.get('comments_count') or 0)}</div>
+    <div class="post-caption">{esc(item.get('caption') or 'Conteúdo YVORA')}</div>
+  </div>
+</a>
+"""
+
+
+def partner_banner(partners: list[dict]) -> str:
+    if not partners:
+        return ""
+    cards = "".join([f'<div class="partner-card"><img src="{esc(item["image"])}" alt="{esc(item["name"])}"><span>{esc(item["name"])}</span></div>' for item in partners])
+    duplicated = cards + cards
+    return f"""
+  <div class="partner-strip">
+    <div class="partner-copy">
+      <div class="partner-kicker">Parceiros YVORA</div>
+      <div class="partner-title">Marcas que fazem parte da nossa experiência</div>
+    </div>
+    <div class="partner-marquee"><div class="partner-track">{duplicated}</div></div>
+  </div>
+"""
+
+
 def render():
-    st.set_page_config(page_title="YVORA Social Wall", page_icon="🍷", layout="wide", initial_sidebar_state="collapsed")
+    st.set_page_config(page_title="YVORA", page_icon="🍷", layout="wide", initial_sidebar_state="collapsed")
+    st_autorefresh(interval=REFRESH_SECONDS * 1000, key="yvora_autorefresh")
+
+    current_time = now_sp()
     status = get_status()
-    media = get_media()
-    highlight = media[0] if media else {}
-    image_url = highlight.get("thumb_url") or "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=1200&auto=format&fit=crop"
-    caption = highlight.get("caption") or "Explore pratos, harmonizações e experiências sensoriais do YVORA."
-    followers = f"{status['followers_count']:,}".replace(",", ".")
-    media_count = status.get("media_count", 0)
-    source_label = "Meta API" if status.get("source") == "meta" else "Modo fallback"
+    media_result = get_media()
+    partners = get_partners()
+    media = media_result.get("items", [])
+    latest = media[:4]
+    top_posts = sorted(media, key=lambda x: x.get("score", 0), reverse=True)[:4]
+    current_count = int(status.get("followers_count", 0))
+    previous_count = read_previous_count()
+    delta = 0 if previous_count is None else current_count - previous_count
+    write_previous_count(current_count)
+    followers = f"{current_count:,}".replace(",", ".")
+    logo_uri = file_data_uri(LOCAL_LOGO)
     instagram_qr = qr_data_uri(PROFILE_URL)
     menu_qr = qr_data_uri(MENU_SENSORIAL_URL)
     wine_qr = qr_data_uri(WINE_EXPLORER_URL)
+    error_msg = media_result.get("error") or status.get("error") or ""
+    latest_html = "".join(post_card(item, "Último post") for item in latest) or f'<div class="empty">Sem posts carregados.<br><small>{esc(error_msg)}</small></div>'
+    top_html = "".join(post_card(item, "Maior interação") for item in top_posts) or f'<div class="empty">Sem dados de interação carregados.<br><small>{esc(error_msg)}</small></div>'
+    logo_html = f'<img src="{logo_uri}" class="logo-img" alt="YVORA">' if logo_uri else '<div class="logo-text">YVORA</div>'
+    should_burst = delta > 0
+    celebration_items = ["🍷", BRAZIL_FLAG_SVG, "🍽️", "🥂", BRAZIL_FLAG_SVG, "🍷", "🍽️", "🥂", BRAZIL_FLAG_SVG, "🍷", "🍽️", "🥂"]
+    burst_html = "".join([f'<div class="celebration-burst w{i}">{celebration_items[i]}</div>' for i in range(len(celebration_items))]) if should_burst else ""
+    welcome_icons = f"<span>🍷</span><span class='inline-br-flag'>{BRAZIL_FLAG_SVG}</span><span>🍽️</span>"
+    welcome_html = f'<div class="welcome-toast"><div class="welcome-kicker">Novo seguidor</div><div class="welcome-title">{esc(WELCOME_MESSAGE)}</div><div class="welcome-icons">{welcome_icons}</div></div>' if should_burst else ""
+    change_html = f'<div class="change positive">+{delta} novo seguidor</div>' if delta == 1 else (f'<div class="change positive">+{delta} novos seguidores</div>' if delta > 1 else "")
+    partners_html = partner_banner(partners)
 
-    st.markdown(f"""
+    css = f"""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');
 #MainMenu, footer, header {{visibility: hidden;}}
-.stApp {{background: radial-gradient(circle at top, #2b2118 0%, #0d0d0d 55%); color: #f5efe7;}}
-.block-container {{padding: 3rem 4rem 2rem 4rem; max-width: 100%;}}
-.yvora-grid {{display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 42px; min-height: 82vh;}}
-.logo {{font-size: 76px; letter-spacing: 10px; color: #d6ab67; font-weight: 800;}}
-.subtitle {{font-size: 27px; color: #f3e6d2; max-width: 760px; line-height: 1.35; margin-top: 8px;}}
-.counter-box {{margin-top: 42px; padding: 40px; border: 1px solid rgba(214,171,103,.35); border-radius: 28px; background: rgba(255,255,255,.045);}}
-.counter-label {{color: #d6ab67; font-size: 19px; text-transform: uppercase; letter-spacing: 3px;}}
-.counter {{font-size: 124px; font-weight: 800; line-height: 1; margin-top: 18px; color: #fff;}}
-.cta {{margin-top: 18px; font-size: 24px; color: #f3e6d2;}}
-.dish-box {{margin-top: 34px; padding: 30px; border-left: 4px solid #d6ab67; background: rgba(255,255,255,.035);}}
-.dish-title {{font-size: 34px; color: #fff; margin-bottom: 12px;}}
-.dish-text {{font-size: 20px; line-height: 1.6; color: #e5d7c3;}}
-.footer {{font-size: 16px; opacity: .68; margin-top: 34px;}}
-.qr-group {{display: flex; gap: 18px; justify-content: center; margin-top: 12px;}}
-.qr-card {{background: rgba(255,255,255,.055); border: 1px solid rgba(214,171,103,.25); padding: 16px; border-radius: 20px; text-align: center; width: 180px;}}
-.qr-card img {{width: 100%; border-radius: 12px; background: white; padding: 8px;}}
-.qr-card p {{margin: 12px 0 0 0; font-size: 16px; color: #f5efe7;}}
-.media-highlight {{margin-top: 28px; border-radius: 24px; overflow: hidden; border: 1px solid rgba(214,171,103,.25); background: rgba(255,255,255,.045);}}
-.media-highlight img {{width: 100%; height: 330px; object-fit: cover; display: block;}}
-.media-caption {{padding: 18px; font-size: 16px; line-height: 1.5; color: #f3e6d2;}}
-.source {{font-size: 14px; color: #b9aa95; margin-top: 8px;}}
-@media (max-width: 900px) {{.yvora-grid {{grid-template-columns: 1fr;}} .counter {{font-size: 82px;}} .logo {{font-size: 54px;}} .qr-group {{flex-wrap: wrap;}}}}
+.stApp {{background: #f7f0e7; color: #211915; font-family: 'Montserrat', sans-serif;}}
+.block-container {{padding: 24px 34px 22px 34px; max-width: 100%;}}
+.shell {{max-width: 1480px; margin: 0 auto;}}
+.header {{display:flex; justify-content:space-between; align-items:center; gap:24px; margin-bottom:18px;}}
+.brand {{display:flex; align-items:center; gap:18px;}}
+.logo-box {{width:86px; height:86px; border-radius:22px; background:#fff; border:1px solid #ddd0c0; display:flex; align-items:center; justify-content:center; overflow:hidden;}}
+.logo-img {{width:100%; height:100%; object-fit:contain; padding:7px;}}
+.logo-text {{font-size:22px; font-weight:800; letter-spacing:2px;}}
+.title {{font-size:42px; font-weight:800; letter-spacing:2px; color:#211915; line-height:1;}}
+.subtitle {{font-size:15px; color:#6f6257; margin-top:8px;}}
+.pill {{background:#fff; border:1px solid #ddd0c0; border-radius:999px; padding:12px 18px; color:#6f6257; font-size:14px; white-space:nowrap;}}
+.partner-strip {{display:grid; grid-template-columns: 330px 1fr; gap:18px; align-items:center; background:#fffaf4; border:1px solid #ddd0c0; border-radius:24px; padding:16px 18px; margin-bottom:22px; box-shadow:0 12px 30px rgba(57,43,35,.08); overflow:hidden;}}
+.partner-kicker {{font-size:11px; text-transform:uppercase; letter-spacing:2px; color:#a7672d; font-weight:800;}}
+.partner-title {{font-size:19px; color:#211915; font-weight:800; margin-top:5px; line-height:1.2;}}
+.partner-marquee {{overflow:hidden; mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); -webkit-mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);}}
+.partner-track {{display:flex; gap:14px; width:max-content; animation: partnerScroll 42s linear infinite;}}
+.partner-card {{width:220px; height:92px; background:#fff; border:1px solid #eadfd1; border-radius:18px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; flex-shrink:0;}}
+.partner-card img {{width:100%; height:100%; object-fit:cover; display:block;}}
+.partner-card span {{position:absolute; left:0; right:0; bottom:0; padding:7px 10px; background:linear-gradient(0deg, rgba(33,25,21,.82), rgba(33,25,21,0)); color:#fffaf4; font-size:11px; font-weight:800; letter-spacing:.5px; text-shadow:0 1px 3px rgba(0,0,0,.4);}}
+@keyframes partnerScroll {{0% {{transform:translateX(0);}} 100% {{transform:translateX(-50%);}}}}
+.grid {{display:grid; grid-template-columns: 410px 1fr; gap:22px; align-items:start;}}
+.card {{background:#fffaf4; border:1px solid #ddd0c0; border-radius:24px; padding:24px; box-shadow:0 12px 30px rgba(57,43,35,.08); position:relative; overflow:hidden;}}
+.counter-label {{font-size:13px; text-transform:uppercase; letter-spacing:2px; color:#a7672d; font-weight:800;}}
+.counter {{font-size:76px; line-height:1; font-weight:800; color:#211915; margin:14px 0 8px;}}
+.handle {{font-size:17px; color:#6f6257; font-weight:600;}}
+.change {{display:inline-block; margin-top:8px; padding:8px 12px; border-radius:999px; background:#f3e0c9; color:#8b4a19; font-size:13px; font-weight:800;}}
+.main-qr {{margin-top:22px; padding:18px; background:#fff; border:1px solid #eadfd1; border-radius:22px; text-align:center;}}
+.main-qr-heading {{font-size:25px; line-height:1.25; font-weight:800; color:#211915; margin-bottom:14px;}}
+.main-qr-heading span {{color:#a7672d;}}
+.main-qr img {{width:250px; max-width:100%; display:block; margin:0 auto;}}
+.main-qr-title {{font-size:22px; font-weight:800; color:#211915; margin-top:12px;}}
+.main-qr-subtitle {{font-size:14px; color:#6f6257; margin-top:6px;}}
+.metrics {{display:grid; grid-template-columns:1fr; gap:12px; margin-top:20px;}}
+.metric {{background:#f7f0e7; border-radius:16px; padding:14px; border:1px solid #eadfd1;}}
+.metric b {{display:block; font-size:22px; color:#211915;}}
+.metric span {{font-size:12px; color:#6f6257; text-transform:uppercase; letter-spacing:1px;}}
+.small-qrs {{display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-top:20px;}}
+.qr {{background:#fff; border:1px solid #eadfd1; border-radius:14px; padding:8px; text-align:center;}}
+.qr img {{width:100%; max-width:82px; display:block; margin:0 auto;}}
+.qr span {{font-size:10px; color:#6f6257; font-weight:700;}}
+.section-title {{font-size:22px; font-weight:800; color:#211915; margin:0 0 14px;}}
+.posts {{display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:14px;}}
+.post {{display:block; background:#fff; border:1px solid #eadfd1; border-radius:18px; overflow:hidden; text-decoration:none; color:#211915; min-height:310px;}}
+.post img {{width:100%; height:170px; object-fit:cover; display:block; background:#eadfd1;}}
+.post-body {{padding:12px;}}
+.post-label {{font-size:11px; color:#a7672d; font-weight:800; text-transform:uppercase; letter-spacing:1.3px;}}
+.post-stats {{font-size:13px; color:#6f6257; font-weight:700; margin-top:6px;}}
+.post-caption {{font-size:12px; color:#6f6257; line-height:1.35; margin-top:7px;}}
+.empty {{padding:22px; border:1px dashed #cdbdaa; border-radius:16px; color:#6f6257; font-size:14px;}}
+.empty small {{display:block; margin-top:8px; color:#a7672d; word-break:break-word;}}
+.stack {{display:flex; flex-direction:column; gap:18px;}}
+.footer-note {{margin-top:18px; color:#8e8074; font-size:12px;}}
+.welcome-toast {{position:fixed; top:34px; left:50%; transform:translateX(-50%); z-index:1000000; width:min(720px, 86vw); text-align:center; background:rgba(255,250,244,.96); border:1px solid #d7c6b2; border-radius:24px; padding:20px 26px; box-shadow:0 22px 60px rgba(57,43,35,.22); animation: welcomeToast 7.2s ease-out forwards;}}
+.welcome-kicker {{font-size:12px; text-transform:uppercase; letter-spacing:2.5px; color:#a7672d; font-weight:800; margin-bottom:8px;}}
+.welcome-title {{font-size:26px; line-height:1.25; color:#211915; font-weight:800;}}
+.welcome-icons {{font-size:26px; margin-top:8px; display:flex; align-items:center; justify-content:center; gap:14px;}}
+.inline-br-flag {{display:inline-flex; width:38px; height:27px; align-items:center; justify-content:center;}}
+.br-flag {{width:100%; height:100%; display:block;}}
+.celebration-burst {{position:fixed; bottom:-44px; font-size:46px; z-index:999999; animation: celebrationFloat 7.8s ease-out forwards; pointer-events:none; filter: drop-shadow(0 8px 10px rgba(0,0,0,.18)); width:52px; height:52px; display:flex; align-items:center; justify-content:center;}}
+.celebration-burst .br-flag {{width:52px; height:36px; border-radius:6px;}}
+.w0 {{left:6%; animation-delay:0s;}} .w1 {{left:13%; animation-delay:.16s;}} .w2 {{left:21%; animation-delay:.32s;}} .w3 {{left:30%; animation-delay:.48s;}} .w4 {{left:39%; animation-delay:.64s;}} .w5 {{left:48%; animation-delay:.80s;}} .w6 {{left:57%; animation-delay:.96s;}} .w7 {{left:66%; animation-delay:1.12s;}} .w8 {{left:75%; animation-delay:1.28s;}} .w9 {{left:83%; animation-delay:1.44s;}} .w10 {{left:91%; animation-delay:1.60s;}} .w11 {{left:96%; animation-delay:1.76s;}}
+@keyframes celebrationFloat {{0% {{transform:translateY(0) scale(.58) rotate(-8deg); opacity:0;}} 12% {{opacity:1;}} 82% {{opacity:1;}} 100% {{transform:translateY(-110vh) scale(1.24) rotate(12deg); opacity:0;}}}}
+@keyframes welcomeToast {{0% {{opacity:0; transform:translate(-50%, -18px) scale(.96);}} 12% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 82% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 100% {{opacity:0; transform:translate(-50%, -18px) scale(.98);}}}}
+@media (max-width:1100px) {{.grid {{grid-template-columns:1fr;}} .posts {{grid-template-columns:repeat(2, 1fr);}} .counter {{font-size:58px;}} .welcome-title {{font-size:20px;}} .partner-strip {{grid-template-columns:1fr;}}}}
 </style>
-<script>
-setInterval(function() {{ window.location.reload(); }}, 60000);
-</script>
-<div class="yvora-grid">
-  <div>
-    <div class="logo">{BRAND_NAME}</div>
-    <div class="subtitle">{BRAND_SUBTITLE}</div>
-    <div class="counter-box">
-      <div class="counter-label">Seguidores brindando com o YVORA</div>
-      <div class="counter">{followers}</div>
-      <div class="cta">{FOLLOW_CTA}</div>
-      <div class="source">{source_label} • {media_count} publicações • atualizado em {datetime.now().strftime('%d/%m %H:%M')}</div>
-    </div>
-    <div class="dish-box">
-      <div class="dish-title">{FEATURED_DISH}</div>
-      <div class="dish-text">{FEATURED_PAIRING}</div>
-    </div>
-    <div class="footer">Rua dos Pinheiros • São Paulo • Experimente, combine, descubra.</div>
+"""
+    header_html = f"""
+<div class="shell">
+  {welcome_html}
+  {burst_html}
+  <div class="header">
+    <div class="brand"><div class="logo-box">{logo_html}</div><div><div class="title">{esc(BRAND_NAME)}</div><div class="subtitle">@{esc(status.get('username'))}</div></div></div>
+    <div class="pill">{esc(status.get('source'))} · atualizado às {current_time.strftime('%H:%M:%S')} · refresh {REFRESH_SECONDS}s</div>
   </div>
-  <div>
-    <div class="qr-group">
-      <div class="qr-card"><img src="{instagram_qr}"><p>Instagram</p></div>
-      <div class="qr-card"><img src="{menu_qr}"><p>Menu Sensorial</p></div>
-      <div class="qr-card"><img src="{wine_qr}"><p>Wine Explorer</p></div>
-    </div>
-    <div class="media-highlight">
-      <img src="{image_url}">
-      <div class="media-caption">{caption}</div>
-    </div>
-  </div>
+  {partners_html}
+  <div class="grid">
+"""
+    left_html = f"""
+<div class="card">
+  <div class="counter-label">Seguidores no Instagram</div>
+  <div class="counter">{followers}</div>
+  <div class="handle">@{esc(status.get('username'))}</div>
+  {change_html}
+  <div class="main-qr"><div class="main-qr-heading">Siga o <span>YVORA no Instagram</span></div><img src="{instagram_qr}"><div class="main-qr-title">Aponte a câmera</div><div class="main-qr-subtitle">e acompanhe o YVORA</div></div>
+  <div class="metrics"><div class="metric"><b>{int(status.get('media_count', 0))}</b><span>publicações</span></div></div>
+  <div class="small-qrs"><div class="qr"><img src="{menu_qr}"><span>Menu Sensorial</span></div><div class="qr"><img src="{wine_qr}"><span>Wine Explorer</span></div></div>
+  <div class="footer-note">Rua dos Pinheiros · São Paulo</div>
 </div>
-""", unsafe_allow_html=True)
+"""
+    right_html = f"""
+<div class="stack">
+  <div class="card"><div class="section-title">Últimos posts</div><div class="posts">{latest_html}</div></div>
+  <div class="card"><div class="section-title">Posts com maior interação</div><div class="posts">{top_html}</div></div>
+</div>
+"""
+    st.markdown(css + header_html + left_html + right_html + "</div></div>", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":

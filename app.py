@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 import qrcode
 import requests
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,13 +21,10 @@ SAO_PAULO_TZ = ZoneInfo("America/Sao_Paulo")
 
 PROFILE_URL = os.getenv("PROFILE_URL", "https://www.instagram.com/yvora.restaurante/")
 BRAND_NAME = os.getenv("BRAND_NAME", "YVORA")
-BRAND_SUBTITLE = os.getenv("BRAND_SUBTITLE", "Contador Instagram")
-FOLLOW_CTA = os.getenv("FOLLOW_CTA", "Siga nosso Instagram")
 WELCOME_MESSAGE = os.getenv("WELCOME_MESSAGE", "Bem-vindo à comunidade YVORA de experiências gastronômicas")
 GRAPH_VERSION = os.getenv("GRAPH_VERSION", "v25.0")
 USER_ACCESS_TOKEN = os.getenv("USER_ACCESS_TOKEN", "").strip()
 IG_BUSINESS_ID = os.getenv("IG_BUSINESS_ID", "17841445877381461").strip()
-CACHE_SECONDS = int(os.getenv("CACHE_SECONDS", "1"))
 MEDIA_CACHE_SECONDS = int(os.getenv("MEDIA_CACHE_SECONDS", "60"))
 MOCK_FOLLOWERS_START = int(os.getenv("MOCK_FOLLOWERS_START", "19330"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
@@ -135,7 +133,9 @@ def post_card(item: dict, label: str) -> str:
 
 
 def render():
-    st.set_page_config(page_title="YVORA Instagram Counter", page_icon="🍷", layout="wide", initial_sidebar_state="collapsed")
+    st.set_page_config(page_title="YVORA", page_icon="🍷", layout="wide", initial_sidebar_state="collapsed")
+    st_autorefresh(interval=REFRESH_SECONDS * 1000, key="yvora_autorefresh")
+
     current_time = now_sp()
     status = get_status()
     media_result = get_media()
@@ -183,7 +183,6 @@ def render():
 .counter {{font-size:76px; line-height:1; font-weight:800; color:#211915; margin:14px 0 8px;}}
 .handle {{font-size:17px; color:#6f6257; font-weight:600;}}
 .change {{display:inline-block; margin-top:8px; padding:8px 12px; border-radius:999px; background:#f3e0c9; color:#8b4a19; font-size:13px; font-weight:800;}}
-.cta {{font-size:19px; font-weight:700; margin-top:18px; color:#211915;}}
 .main-qr {{margin-top:22px; padding:18px; background:#fff; border:1px solid #eadfd1; border-radius:22px; text-align:center;}}
 .main-qr-heading {{font-size:25px; line-height:1.25; font-weight:800; color:#211915; margin-bottom:14px;}}
 .main-qr-heading span {{color:#a7672d;}}
@@ -223,15 +222,14 @@ def render():
 @keyframes welcomeToast {{0% {{opacity:0; transform:translate(-50%, -18px) scale(.96);}} 12% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 82% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 100% {{opacity:0; transform:translate(-50%, -18px) scale(.98);}}}}
 @media (max-width:1100px) {{.grid {{grid-template-columns:1fr;}} .posts {{grid-template-columns:repeat(2, 1fr);}} .counter {{font-size:58px;}} .welcome-title {{font-size:20px;}}}}
 </style>
-<meta http-equiv="refresh" content="{REFRESH_SECONDS}">
 """
     header_html = f"""
 <div class="shell">
   {welcome_html}
   {burst_html}
   <div class="header">
-    <div class="brand"><div class="logo-box">{logo_html}</div><div><div class="title">{esc(BRAND_NAME)}</div><div class="subtitle">{esc(BRAND_SUBTITLE)} · @{esc(status.get('username'))}</div></div></div>
-    <div class="pill">{esc(status.get('source'))} · horário de São Paulo · atualiza a cada {REFRESH_SECONDS}s · {current_time.strftime('%d/%m %H:%M:%S')}</div>
+    <div class="brand"><div class="logo-box">{logo_html}</div><div><div class="title">{esc(BRAND_NAME)}</div><div class="subtitle">@{esc(status.get('username'))}</div></div></div>
+    <div class="pill">{esc(status.get('source'))} · atualizado às {current_time.strftime('%H:%M:%S')} · refresh {REFRESH_SECONDS}s</div>
   </div>
   <div class="grid">
 """
@@ -253,8 +251,7 @@ def render():
   <div class="card"><div class="section-title">Posts com maior interação</div><div class="posts">{top_html}</div></div>
 </div>
 """
-    close_html = "</div></div>"
-    st.markdown(css + header_html + left_html + right_html + close_html, unsafe_allow_html=True)
+    st.markdown(css + header_html + left_html + right_html + "</div></div>", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":

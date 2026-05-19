@@ -4,6 +4,7 @@ from io import BytesIO
 import base64
 import html
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import qrcode
 import requests
@@ -15,6 +16,7 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent
 LOCAL_LOGO = BASE_DIR / "yvora_logo.JPG"
 STATE_FILE = BASE_DIR / ".last_followers_count"
+SAO_PAULO_TZ = ZoneInfo("America/Sao_Paulo")
 
 PROFILE_URL = os.getenv("PROFILE_URL", "https://www.instagram.com/yvora.restaurante/")
 BRAND_NAME = os.getenv("BRAND_NAME", "YVORA")
@@ -38,6 +40,10 @@ BRAZIL_FLAG_SVG = """
   <path d='M43 38 C53 34 67 34 77 39' stroke='white' stroke-width='4' fill='none'/>
 </svg>
 """.strip()
+
+
+def now_sp() -> datetime:
+    return datetime.now(SAO_PAULO_TZ)
 
 
 def read_previous_count() -> int | None:
@@ -130,6 +136,7 @@ def post_card(item: dict, label: str) -> str:
 
 def render():
     st.set_page_config(page_title="YVORA Instagram Counter", page_icon="🍷", layout="wide", initial_sidebar_state="collapsed")
+    current_time = now_sp()
     status = get_status()
     media_result = get_media()
     media = media_result.get("items", [])
@@ -224,7 +231,7 @@ def render():
   {burst_html}
   <div class="header">
     <div class="brand"><div class="logo-box">{logo_html}</div><div><div class="title">{esc(BRAND_NAME)}</div><div class="subtitle">{esc(BRAND_SUBTITLE)} · @{esc(status.get('username'))}</div></div></div>
-    <div class="pill">{esc(status.get('source'))} · atualiza a cada {REFRESH_SECONDS}s · {datetime.now().strftime('%d/%m %H:%M:%S')}</div>
+    <div class="pill">{esc(status.get('source'))} · horário de São Paulo · atualiza a cada {REFRESH_SECONDS}s · {current_time.strftime('%d/%m %H:%M:%S')}</div>
   </div>
   <div class="grid">
 """

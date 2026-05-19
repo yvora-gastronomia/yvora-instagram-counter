@@ -184,7 +184,6 @@ def partner_banner(partners: list[dict]) -> str:
   <div class="partner-strip">
     <div class="partner-copy">
       <div class="partner-kicker">Parceiros YVORA</div>
-      <div class="partner-title">Marcas que fazem parte da nossa experiência</div>
     </div>
     <div class="partner-marquee"><div class="partner-track">{duplicated}</div></div>
   </div>
@@ -230,22 +229,20 @@ def render():
 .stApp {{background: #f7f0e7; color: #211915; font-family: 'Montserrat', sans-serif;}}
 .block-container {{padding: 24px 34px 22px 34px; max-width: 100%;}}
 .shell {{max-width: 1480px; margin: 0 auto;}}
-.header {{display:flex; justify-content:space-between; align-items:center; gap:24px; margin-bottom:18px;}}
-.brand {{display:flex; align-items:center; gap:18px;}}
+.header {{display:flex; justify-content:space-between; align-items:center; gap:24px; margin-bottom:22px;}}
+.brand {{display:flex; align-items:center; gap:18px; flex:0 0 auto;}}
 .logo-box {{width:86px; height:86px; border-radius:22px; background:#fff; border:1px solid #ddd0c0; display:flex; align-items:center; justify-content:center; overflow:hidden;}}
 .logo-img {{width:100%; height:100%; object-fit:contain; padding:7px;}}
 .logo-text {{font-size:22px; font-weight:800; letter-spacing:2px;}}
 .title {{font-size:42px; font-weight:800; letter-spacing:2px; color:#211915; line-height:1;}}
 .subtitle {{font-size:15px; color:#6f6257; margin-top:8px;}}
-.pill {{background:#fff; border:1px solid #ddd0c0; border-radius:999px; padding:12px 18px; color:#6f6257; font-size:14px; white-space:nowrap;}}
-.partner-strip {{display:grid; grid-template-columns: 330px 1fr; gap:18px; align-items:center; background:#fffaf4; border:1px solid #ddd0c0; border-radius:24px; padding:16px 18px; margin-bottom:22px; box-shadow:0 12px 30px rgba(57,43,35,.08); overflow:hidden;}}
-.partner-kicker {{font-size:11px; text-transform:uppercase; letter-spacing:2px; color:#a7672d; font-weight:800;}}
-.partner-title {{font-size:19px; color:#211915; font-weight:800; margin-top:5px; line-height:1.2;}}
-.partner-marquee {{overflow:hidden; mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); -webkit-mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);}}
-.partner-track {{display:flex; gap:14px; width:max-content; animation: partnerScroll 42s linear infinite;}}
-.partner-card {{width:220px; height:92px; background:#fff; border:1px solid #eadfd1; border-radius:18px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; flex-shrink:0;}}
+.partner-strip {{height:92px; flex:1 1 auto; min-width:520px; max-width:880px; display:grid; grid-template-columns: 145px 1fr; gap:14px; align-items:center; background:#fffaf4; border:1px solid #ddd0c0; border-radius:24px; padding:12px 16px; box-shadow:0 12px 30px rgba(57,43,35,.08); overflow:hidden;}}
+.partner-kicker {{font-size:12px; text-transform:uppercase; letter-spacing:2px; color:#a7672d; font-weight:800; line-height:1.25;}}
+.partner-marquee {{overflow:hidden; height:100%; display:flex; align-items:center; mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); -webkit-mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);}}
+.partner-track {{display:flex; gap:12px; width:max-content; animation: partnerScroll 42s linear infinite;}}
+.partner-card {{width:190px; height:66px; background:#fff; border:1px solid #eadfd1; border-radius:16px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; flex-shrink:0;}}
 .partner-card img {{width:100%; height:100%; object-fit:cover; display:block;}}
-.partner-card span {{position:absolute; left:0; right:0; bottom:0; padding:7px 10px; background:linear-gradient(0deg, rgba(33,25,21,.82), rgba(33,25,21,0)); color:#fffaf4; font-size:11px; font-weight:800; letter-spacing:.5px; text-shadow:0 1px 3px rgba(0,0,0,.4);}}
+.partner-card span {{position:absolute; left:0; right:0; bottom:0; padding:5px 8px; background:linear-gradient(0deg, rgba(33,25,21,.78), rgba(33,25,21,0)); color:#fffaf4; font-size:10px; font-weight:800; letter-spacing:.4px; text-shadow:0 1px 3px rgba(0,0,0,.4);}}
 @keyframes partnerScroll {{0% {{transform:translateX(0);}} 100% {{transform:translateX(-50%);}}}}
 .grid {{display:grid; grid-template-columns: 410px 1fr; gap:22px; align-items:start;}}
 .card {{background:#fffaf4; border:1px solid #ddd0c0; border-radius:24px; padding:24px; box-shadow:0 12px 30px rgba(57,43,35,.08); position:relative; overflow:hidden;}}
@@ -290,7 +287,7 @@ def render():
 .w0 {{left:6%; animation-delay:0s;}} .w1 {{left:13%; animation-delay:.16s;}} .w2 {{left:21%; animation-delay:.32s;}} .w3 {{left:30%; animation-delay:.48s;}} .w4 {{left:39%; animation-delay:.64s;}} .w5 {{left:48%; animation-delay:.80s;}} .w6 {{left:57%; animation-delay:.96s;}} .w7 {{left:66%; animation-delay:1.12s;}} .w8 {{left:75%; animation-delay:1.28s;}} .w9 {{left:83%; animation-delay:1.44s;}} .w10 {{left:91%; animation-delay:1.60s;}} .w11 {{left:96%; animation-delay:1.76s;}}
 @keyframes celebrationFloat {{0% {{transform:translateY(0) scale(.58) rotate(-8deg); opacity:0;}} 12% {{opacity:1;}} 82% {{opacity:1;}} 100% {{transform:translateY(-110vh) scale(1.24) rotate(12deg); opacity:0;}}}}
 @keyframes welcomeToast {{0% {{opacity:0; transform:translate(-50%, -18px) scale(.96);}} 12% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 82% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 100% {{opacity:0; transform:translate(-50%, -18px) scale(.98);}}}}
-@media (max-width:1100px) {{.grid {{grid-template-columns:1fr;}} .posts {{grid-template-columns:repeat(2, 1fr);}} .counter {{font-size:58px;}} .welcome-title {{font-size:20px;}} .partner-strip {{grid-template-columns:1fr;}}}}
+@media (max-width:1100px) {{.header {{flex-wrap:wrap;}} .partner-strip {{order:3; flex-basis:100%; max-width:none; min-width:0;}} .grid {{grid-template-columns:1fr;}} .posts {{grid-template-columns:repeat(2, 1fr);}} .counter {{font-size:58px;}} .welcome-title {{font-size:20px;}}}}
 </style>
 """
     header_html = f"""
@@ -299,9 +296,8 @@ def render():
   {burst_html}
   <div class="header">
     <div class="brand"><div class="logo-box">{logo_html}</div><div><div class="title">{esc(BRAND_NAME)}</div><div class="subtitle">@{esc(status.get('username'))}</div></div></div>
-    <div class="pill">{esc(status.get('source'))} · atualizado às {current_time.strftime('%H:%M:%S')} · refresh {REFRESH_SECONDS}s</div>
+    {partners_html}
   </div>
-  {partners_html}
   <div class="grid">
 """
     left_html = f"""

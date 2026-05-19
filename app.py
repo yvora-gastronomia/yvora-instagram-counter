@@ -3,6 +3,7 @@ from datetime import datetime
 from io import BytesIO
 import base64
 import html
+import re
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -26,10 +27,13 @@ GRAPH_VERSION = os.getenv("GRAPH_VERSION", "v25.0")
 USER_ACCESS_TOKEN = os.getenv("USER_ACCESS_TOKEN", "").strip()
 IG_BUSINESS_ID = os.getenv("IG_BUSINESS_ID", "17841445877381461").strip()
 MEDIA_CACHE_SECONDS = int(os.getenv("MEDIA_CACHE_SECONDS", "60"))
+PARTNERS_CACHE_SECONDS = int(os.getenv("PARTNERS_CACHE_SECONDS", "60"))
 MOCK_FOLLOWERS_START = int(os.getenv("MOCK_FOLLOWERS_START", "19330"))
 REFRESH_SECONDS = int(os.getenv("REFRESH_SECONDS", "10"))
 WINE_EXPLORER_URL = os.getenv("WINE_EXPLORER_URL", "https://yvora-wine.streamlit.app/")
 MENU_SENSORIAL_URL = os.getenv("MENU_SENSORIAL_URL", "https://yvora-menu-sensorial.streamlit.app/")
+PARTNERS_SHEET_ID = os.getenv("PARTNERS_SHEET_ID", "1s1dGQZGG1A5M-6yD5fyggy4otmS8zQFl_GRBOiU32CI")
+PARTNERS_SHEET_NAME = os.getenv("PARTNERS_SHEET_NAME", "Sheet1")
 BRAZIL_FLAG_SVG = """
 <svg class='br-flag' viewBox='0 0 120 84' xmlns='http://www.w3.org/2000/svg' aria-label='Bandeira do Brasil'>
   <rect width='120' height='84' rx='10' fill='#009739'/>
@@ -65,6 +69,18 @@ def file_data_uri(path: Path) -> str:
         return ""
     mime = "image/jpeg" if path.suffix.lower() in [".jpg", ".jpeg"] else "image/png"
     return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode("utf-8")
+
+
+def drive_image_url(url: str) -> str:
+    text = str(url or "").strip()
+    if not text:
+        return ""
+    patterns = [r"/file/d/([a-zA-Z0-9_-]+)", r"id=([a-zA-Z0-9_-]+)", r"/d/([a-zA-Z0-9_-]+)"]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return f"https://drive.google.com/thumbnail?id={match.group(1)}&sz=w1600"
+    return text
 
 
 def graph_get(path: str, params: dict | None = None, timeout: int = 10) -> dict:
@@ -107,6 +123,33 @@ def get_media() -> dict:
     return result
 
 
+@st.cache_data(ttl=PARTNERS_CACHE_SECONDS, show_spinner=False)
+def get_partners() -> list[dict]:
+    try:
+        csv_url = f"https://docs.google.com/spreadsheets/d/{PARTNERS_SHEET_ID}/gviz/tq?tqx=out:csv&sheet={PARTNERS_SHEET_NAME}"
+        response = requests.get(csv_url, timeout=10)
+        response.raise_for_status()
+        import csv
+        from io import StringIO
+        rows = list(csv.DictReader(StringIO(response.text)))
+        partners = []
+        for row in rows:
+            name = (row.get("Parceiros") or row.get("parceiros") or row.get("Nome") or row.get("nome") or "").strip()
+            image = (row.get("URL") or row.get("url") or row.get("Imagem") or row.get("imagem") or "").strip()
+            active = str(row.get("Ativo") or row.get("ativo") or "0").strip()
+            order_raw = str(row.get("Ordem") or row.get("ordem") or "999").strip()
+            if active != "1" or not name or not image:
+                continue
+            try:
+                order = int(float(order_raw.replace(",", ".")))
+            except Exception:
+                order = 999
+            partners.append({"name": name, "image": drive_image_url(image), "order": order})
+        return sorted(partners, key=lambda x: (x["order"], x["name"]))
+    except Exception:
+        return []
+
+
 def esc(value: str) -> str:
     return html.escape(str(value or ""))
 
@@ -132,6 +175,22 @@ def post_card(item: dict, label: str) -> str:
 """
 
 
+def partner_banner(partners: list[dict]) -> str:
+    if not partners:
+        return ""
+    cards = "".join([f'<div class="partner-card"><img src="{esc(item["image"])}" alt="{esc(item["name"])}"><span>{esc(item["name"])}</span></div>' for item in partners])
+    duplicated = cards + cards
+    return f"""
+  <div class="partner-strip">
+    <div class="partner-copy">
+      <div class="partner-kicker">Parceiros YVORA</div>
+      <div class="partner-title">Marcas que fazem parte da nossa experiência</div>
+    </div>
+    <div class="partner-marquee"><div class="partner-track">{duplicated}</div></div>
+  </div>
+"""
+
+
 def render():
     st.set_page_config(page_title="YVORA", page_icon="🍷", layout="wide", initial_sidebar_state="collapsed")
     st_autorefresh(interval=REFRESH_SECONDS * 1000, key="yvora_autorefresh")
@@ -139,6 +198,7 @@ def render():
     current_time = now_sp()
     status = get_status()
     media_result = get_media()
+    partners = get_partners()
     media = media_result.get("items", [])
     latest = media[:4]
     top_posts = sorted(media, key=lambda x: x.get("score", 0), reverse=True)[:4]
@@ -161,6 +221,7 @@ def render():
     welcome_icons = f"<span>🍷</span><span class='inline-br-flag'>{BRAZIL_FLAG_SVG}</span><span>🍽️</span>"
     welcome_html = f'<div class="welcome-toast"><div class="welcome-kicker">Novo seguidor</div><div class="welcome-title">{esc(WELCOME_MESSAGE)}</div><div class="welcome-icons">{welcome_icons}</div></div>' if should_burst else ""
     change_html = f'<div class="change positive">+{delta} novo seguidor</div>' if delta == 1 else (f'<div class="change positive">+{delta} novos seguidores</div>' if delta > 1 else "")
+    partners_html = partner_banner(partners)
 
     css = f"""
 <style>
@@ -169,7 +230,7 @@ def render():
 .stApp {{background: #f7f0e7; color: #211915; font-family: 'Montserrat', sans-serif;}}
 .block-container {{padding: 24px 34px 22px 34px; max-width: 100%;}}
 .shell {{max-width: 1480px; margin: 0 auto;}}
-.header {{display:flex; justify-content:space-between; align-items:center; gap:24px; margin-bottom:22px;}}
+.header {{display:flex; justify-content:space-between; align-items:center; gap:24px; margin-bottom:18px;}}
 .brand {{display:flex; align-items:center; gap:18px;}}
 .logo-box {{width:86px; height:86px; border-radius:22px; background:#fff; border:1px solid #ddd0c0; display:flex; align-items:center; justify-content:center; overflow:hidden;}}
 .logo-img {{width:100%; height:100%; object-fit:contain; padding:7px;}}
@@ -177,6 +238,15 @@ def render():
 .title {{font-size:42px; font-weight:800; letter-spacing:2px; color:#211915; line-height:1;}}
 .subtitle {{font-size:15px; color:#6f6257; margin-top:8px;}}
 .pill {{background:#fff; border:1px solid #ddd0c0; border-radius:999px; padding:12px 18px; color:#6f6257; font-size:14px; white-space:nowrap;}}
+.partner-strip {{display:grid; grid-template-columns: 330px 1fr; gap:18px; align-items:center; background:#fffaf4; border:1px solid #ddd0c0; border-radius:24px; padding:16px 18px; margin-bottom:22px; box-shadow:0 12px 30px rgba(57,43,35,.08); overflow:hidden;}}
+.partner-kicker {{font-size:11px; text-transform:uppercase; letter-spacing:2px; color:#a7672d; font-weight:800;}}
+.partner-title {{font-size:19px; color:#211915; font-weight:800; margin-top:5px; line-height:1.2;}}
+.partner-marquee {{overflow:hidden; mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); -webkit-mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);}}
+.partner-track {{display:flex; gap:14px; width:max-content; animation: partnerScroll 42s linear infinite;}}
+.partner-card {{width:220px; height:92px; background:#fff; border:1px solid #eadfd1; border-radius:18px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; flex-shrink:0;}}
+.partner-card img {{width:100%; height:100%; object-fit:cover; display:block;}}
+.partner-card span {{position:absolute; left:0; right:0; bottom:0; padding:7px 10px; background:linear-gradient(0deg, rgba(33,25,21,.82), rgba(33,25,21,0)); color:#fffaf4; font-size:11px; font-weight:800; letter-spacing:.5px; text-shadow:0 1px 3px rgba(0,0,0,.4);}}
+@keyframes partnerScroll {{0% {{transform:translateX(0);}} 100% {{transform:translateX(-50%);}}}}
 .grid {{display:grid; grid-template-columns: 410px 1fr; gap:22px; align-items:start;}}
 .card {{background:#fffaf4; border:1px solid #ddd0c0; border-radius:24px; padding:24px; box-shadow:0 12px 30px rgba(57,43,35,.08); position:relative; overflow:hidden;}}
 .counter-label {{font-size:13px; text-transform:uppercase; letter-spacing:2px; color:#a7672d; font-weight:800;}}
@@ -220,7 +290,7 @@ def render():
 .w0 {{left:6%; animation-delay:0s;}} .w1 {{left:13%; animation-delay:.16s;}} .w2 {{left:21%; animation-delay:.32s;}} .w3 {{left:30%; animation-delay:.48s;}} .w4 {{left:39%; animation-delay:.64s;}} .w5 {{left:48%; animation-delay:.80s;}} .w6 {{left:57%; animation-delay:.96s;}} .w7 {{left:66%; animation-delay:1.12s;}} .w8 {{left:75%; animation-delay:1.28s;}} .w9 {{left:83%; animation-delay:1.44s;}} .w10 {{left:91%; animation-delay:1.60s;}} .w11 {{left:96%; animation-delay:1.76s;}}
 @keyframes celebrationFloat {{0% {{transform:translateY(0) scale(.58) rotate(-8deg); opacity:0;}} 12% {{opacity:1;}} 82% {{opacity:1;}} 100% {{transform:translateY(-110vh) scale(1.24) rotate(12deg); opacity:0;}}}}
 @keyframes welcomeToast {{0% {{opacity:0; transform:translate(-50%, -18px) scale(.96);}} 12% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 82% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 100% {{opacity:0; transform:translate(-50%, -18px) scale(.98);}}}}
-@media (max-width:1100px) {{.grid {{grid-template-columns:1fr;}} .posts {{grid-template-columns:repeat(2, 1fr);}} .counter {{font-size:58px;}} .welcome-title {{font-size:20px;}}}}
+@media (max-width:1100px) {{.grid {{grid-template-columns:1fr;}} .posts {{grid-template-columns:repeat(2, 1fr);}} .counter {{font-size:58px;}} .welcome-title {{font-size:20px;}} .partner-strip {{grid-template-columns:1fr;}}}}
 </style>
 """
     header_html = f"""
@@ -231,6 +301,7 @@ def render():
     <div class="brand"><div class="logo-box">{logo_html}</div><div><div class="title">{esc(BRAND_NAME)}</div><div class="subtitle">@{esc(status.get('username'))}</div></div></div>
     <div class="pill">{esc(status.get('source'))} · atualizado às {current_time.strftime('%H:%M:%S')} · refresh {REFRESH_SECONDS}s</div>
   </div>
+  {partners_html}
   <div class="grid">
 """
     left_html = f"""

@@ -84,22 +84,6 @@ def drive_image_url(url: str) -> str:
     return text
 
 
-def image_data_uri_from_url(url: str) -> str:
-    final_url = drive_image_url(url)
-    if not final_url:
-        return ""
-    try:
-        response = requests.get(final_url, timeout=12)
-        response.raise_for_status()
-        content_type = response.headers.get("content-type", "image/jpeg").split(";")[0]
-        if "image" not in content_type:
-            content_type = "image/jpeg"
-        encoded = base64.b64encode(response.content).decode("utf-8")
-        return f"data:{content_type};base64,{encoded}"
-    except Exception:
-        return final_url
-
-
 def graph_get(path: str, params: dict | None = None, timeout: int = 10) -> dict:
     if not USER_ACCESS_TOKEN:
         raise RuntimeError("USER_ACCESS_TOKEN vazio no ambiente")
@@ -161,7 +145,7 @@ def get_partners() -> list[dict]:
                 order = int(float(order_raw.replace(",", ".")))
             except Exception:
                 order = 999
-            partners.append({"name": name, "image": image_data_uri_from_url(image), "order": order})
+            partners.append({"name": name, "image": drive_image_url(image), "order": order})
         return sorted(partners, key=lambda x: (x["order"], x["name"]))
     except Exception:
         return []
@@ -192,14 +176,17 @@ def post_card(item: dict, label: str) -> str:
 """
 
 
-def render_partner_banner(partners: list[dict]) -> None:
+def partner_banner(partners: list[dict]) -> str:
     if not partners:
-        return
-    st.markdown('<div class="partner-native"><div class="partner-native-label">Parceiros YVORA</div></div>', unsafe_allow_html=True)
-    cols = st.columns(len(partners), gap="small")
-    for col, partner in zip(cols, partners):
-        with col:
-            st.image(partner["image"], use_container_width=True)
+        return ""
+    cards = "".join([f'<div class="partner-card"><img src="{esc(item["image"])}" alt="{esc(item["name"])}" title="{esc(item["name"])}"></div>' for item in partners])
+    duplicated = cards + cards
+    return f"""
+    <div class="partner-bar">
+      <div class="partner-label">Parceiros YVORA</div>
+      <div class="partner-marquee"><div class="partner-track">{duplicated}</div></div>
+    </div>
+"""
 
 
 def render():
@@ -232,6 +219,7 @@ def render():
     welcome_icons = f"<span>🍷</span><span class='inline-br-flag'>{BRAZIL_FLAG_SVG}</span><span>🍽️</span>"
     welcome_html = f'<div class="welcome-toast"><div class="welcome-kicker">Novo seguidor</div><div class="welcome-title">{esc(WELCOME_MESSAGE)}</div><div class="welcome-icons">{welcome_icons}</div></div>' if should_burst else ""
     change_html = f'<div class="change positive">+{delta} novo seguidor</div>' if delta == 1 else (f'<div class="change positive">+{delta} novos seguidores</div>' if delta > 1 else "")
+    partners_html = partner_banner(partners)
 
     css = f"""
 <style>
@@ -248,11 +236,13 @@ def render():
 .title {{font-size:42px; font-weight:800; letter-spacing:2px; color:#211915; line-height:1;}}
 .subtitle {{font-size:15px; color:#6f6257; margin-top:8px;}}
 .pill {{background:#fff; border:1px solid #ddd0c0; border-radius:999px; padding:12px 18px; color:#6f6257; font-size:14px; white-space:nowrap; flex:0 0 auto;}}
-.partner-wrap {{flex:1 1 auto; max-width:620px; min-width:380px; background:#fffaf4; border:1px solid #ddd0c0; border-radius:22px; padding:10px 16px; box-shadow:0 10px 24px rgba(57,43,35,.07);}}
-.partner-native-label {{font-size:11px; text-transform:uppercase; letter-spacing:2px; color:#a7672d; font-weight:800; line-height:1.25; margin-bottom:6px;}}
-.partner-wrap [data-testid="stImage"] img {{height:42px !important; object-fit:contain !important; width:100% !important;}}
-.partner-wrap [data-testid="stImage"] {{display:flex; align-items:center; justify-content:center; background:#fff; border:1px solid #eadfd1; border-radius:14px; padding:6px; height:54px; overflow:hidden;}}
-.partner-wrap [data-testid="column"] {{display:flex; align-items:center;}}
+.partner-bar {{height:86px; flex:1 1 auto; min-width:420px; max-width:650px; background:#fffaf4; border:1px solid #ddd0c0; border-radius:22px; padding:10px 16px; display:grid; grid-template-columns: 120px 1fr; gap:12px; align-items:center; overflow:hidden; box-shadow:0 10px 24px rgba(57,43,35,.07);}}
+.partner-label {{font-size:11px; text-transform:uppercase; letter-spacing:2px; color:#a7672d; font-weight:800; line-height:1.25;}}
+.partner-marquee {{overflow:hidden; height:100%; display:flex; align-items:center; mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); -webkit-mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);}}
+.partner-track {{display:flex; gap:10px; width:max-content; animation: partnerScroll 36s linear infinite; align-items:center;}}
+.partner-card {{width:118px; height:54px; background:#fff; border:1px solid #eadfd1; border-radius:14px; display:flex; align-items:center; justify-content:center; overflow:hidden; flex:0 0 auto; padding:8px;}}
+.partner-card img {{width:100%; height:100%; object-fit:contain; display:block;}}
+@keyframes partnerScroll {{0% {{transform:translateX(0);}} 100% {{transform:translateX(-50%);}}}}
 .grid {{display:grid; grid-template-columns: 410px 1fr; gap:22px; align-items:start;}}
 .card {{background:#fffaf4; border:1px solid #ddd0c0; border-radius:24px; padding:24px; box-shadow:0 12px 30px rgba(57,43,35,.08); position:relative; overflow:hidden;}}
 .counter-label {{font-size:13px; text-transform:uppercase; letter-spacing:2px; color:#a7672d; font-weight:800;}}
@@ -296,17 +286,20 @@ def render():
 .w0 {{left:6%; animation-delay:0s;}} .w1 {{left:13%; animation-delay:.16s;}} .w2 {{left:21%; animation-delay:.32s;}} .w3 {{left:30%; animation-delay:.48s;}} .w4 {{left:39%; animation-delay:.64s;}} .w5 {{left:48%; animation-delay:.80s;}} .w6 {{left:57%; animation-delay:.96s;}} .w7 {{left:66%; animation-delay:1.12s;}} .w8 {{left:75%; animation-delay:1.28s;}} .w9 {{left:83%; animation-delay:1.44s;}} .w10 {{left:91%; animation-delay:1.60s;}} .w11 {{left:96%; animation-delay:1.76s;}}
 @keyframes celebrationFloat {{0% {{transform:translateY(0) scale(.58) rotate(-8deg); opacity:0;}} 12% {{opacity:1;}} 82% {{opacity:1;}} 100% {{transform:translateY(-110vh) scale(1.24) rotate(12deg); opacity:0;}}}}
 @keyframes welcomeToast {{0% {{opacity:0; transform:translate(-50%, -18px) scale(.96);}} 12% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 82% {{opacity:1; transform:translate(-50%, 0) scale(1);}} 100% {{opacity:0; transform:translate(-50%, -18px) scale(.98);}}}}
-@media (max-width:1100px) {{.header {{flex-wrap:wrap;}} .partner-wrap {{order:3; flex-basis:100%; max-width:none;}} .grid {{grid-template-columns:1fr;}} .posts {{grid-template-columns:repeat(2, 1fr);}} .counter {{font-size:58px;}} .welcome-title {{font-size:20px;}}}}
+@media (max-width:1100px) {{.header {{flex-wrap:wrap;}} .partner-bar {{order:3; flex-basis:100%; max-width:none;}} .grid {{grid-template-columns:1fr;}} .posts {{grid-template-columns:repeat(2, 1fr);}} .counter {{font-size:58px;}} .welcome-title {{font-size:20px;}}}}
 </style>
 """
-    st.markdown(css, unsafe_allow_html=True)
-    st.markdown(f'<div class="shell"><div class="header"><div class="brand"><div class="logo-box">{logo_html}</div><div><div class="title">{esc(BRAND_NAME)}</div><div class="subtitle">@{esc(status.get("username"))}</div></div></div>', unsafe_allow_html=True)
-    with st.container():
-        st.markdown('<div class="partner-wrap">', unsafe_allow_html=True)
-        render_partner_banner(partners)
-        st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="pill">{esc(status.get("source"))} · atualizado às {current_time.strftime("%H:%M:%S")} · refresh {REFRESH_SECONDS}s</div></div>{welcome_html}{burst_html}<div class="grid">', unsafe_allow_html=True)
-
+    header_html = f"""
+<div class="shell">
+  {welcome_html}
+  {burst_html}
+  <div class="header">
+    <div class="brand"><div class="logo-box">{logo_html}</div><div><div class="title">{esc(BRAND_NAME)}</div><div class="subtitle">@{esc(status.get('username'))}</div></div></div>
+    {partners_html}
+    <div class="pill">{esc(status.get('source'))} · atualizado às {current_time.strftime('%H:%M:%S')} · refresh {REFRESH_SECONDS}s</div>
+  </div>
+  <div class="grid">
+"""
     left_html = f"""
 <div class="card">
   <div class="counter-label">Seguidores no Instagram</div>
@@ -325,7 +318,7 @@ def render():
   <div class="card"><div class="section-title">Posts com maior interação</div><div class="posts">{top_html}</div></div>
 </div>
 """
-    st.markdown(left_html + right_html + "</div></div>", unsafe_allow_html=True)
+    st.markdown(css + header_html + left_html + right_html + "</div></div>", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":

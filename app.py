@@ -182,9 +182,7 @@ def partner_banner(partners: list[dict]) -> str:
     duplicated = cards + cards
     return f"""
   <div class="partner-strip">
-    <div class="partner-copy">
-      <div class="partner-kicker">Parceiros YVORA</div>
-    </div>
+    <div class="partner-kicker">Parceiros YVORA</div>
     <div class="partner-marquee"><div class="partner-track">{duplicated}</div></div>
   </div>
 """
@@ -236,11 +234,11 @@ def render():
 .logo-text {{font-size:22px; font-weight:800; letter-spacing:2px;}}
 .title {{font-size:42px; font-weight:800; letter-spacing:2px; color:#211915; line-height:1;}}
 .subtitle {{font-size:15px; color:#6f6257; margin-top:8px;}}
-.partner-strip {{height:92px; flex:1 1 auto; min-width:520px; max-width:880px; display:grid; grid-template-columns: 145px 1fr; gap:14px; align-items:center; background:#fffaf4; border:1px solid #ddd0c0; border-radius:24px; padding:12px 16px; box-shadow:0 12px 30px rgba(57,43,35,.08); overflow:hidden;}}
-.partner-kicker {{font-size:12px; text-transform:uppercase; letter-spacing:2px; color:#a7672d; font-weight:800; line-height:1.25;}}
+.partner-strip {{height:104px; flex:1 1 auto; min-width:520px; max-width:880px; display:grid; grid-template-rows: 20px 1fr; gap:8px; align-items:center; background:#fffaf4; border:1px solid #ddd0c0; border-radius:24px; padding:10px 16px 12px 16px; box-shadow:0 12px 30px rgba(57,43,35,.08); overflow:hidden;}}
+.partner-kicker {{font-size:12px; text-transform:uppercase; letter-spacing:2px; color:#a7672d; font-weight:800; line-height:1; padding-left:2px;}}
 .partner-marquee {{overflow:hidden; height:100%; display:flex; align-items:center; mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); -webkit-mask-image:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);}}
 .partner-track {{display:flex; gap:12px; width:max-content; animation: partnerScroll 42s linear infinite;}}
-.partner-card {{width:190px; height:66px; background:#fff; border:1px solid #eadfd1; border-radius:16px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; flex-shrink:0;}}
+.partner-card {{width:218px; height:66px; background:#fff; border:1px solid #eadfd1; border-radius:16px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; flex-shrink:0;}}
 .partner-card img {{width:100%; height:100%; object-fit:cover; display:block;}}
 .partner-card span {{position:absolute; left:0; right:0; bottom:0; padding:5px 8px; background:linear-gradient(0deg, rgba(33,25,21,.78), rgba(33,25,21,0)); color:#fffaf4; font-size:10px; font-weight:800; letter-spacing:.4px; text-shadow:0 1px 3px rgba(0,0,0,.4);}}
 @keyframes partnerScroll {{0% {{transform:translateX(0);}} 100% {{transform:translateX(-50%);}}}}
